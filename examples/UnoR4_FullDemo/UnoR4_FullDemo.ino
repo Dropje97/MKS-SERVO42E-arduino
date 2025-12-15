@@ -8,22 +8,23 @@ public:
     return CAN.begin(bitrate);
   }
   bool send(const CanFrame& f) override {
-    CanMsg m(CanStandardId(f.id), f.dlc, f.data);
-    return CAN.write(m);
+    arduino::CanMsg m(f.id, f.dlc, f.data);
+    return CAN.write(m) == 1;
   }
   bool available() override {
-    return CAN.available();
+    return CAN.available() > 0;
   }
   bool read(CanFrame& out) override {
-    CanMsg m;
-    if (!CAN.read(m)) return false;
+    if (CAN.available() == 0) return false;
+    arduino::CanMsg m = CAN.read();
     out.id = m.id;
     out.dlc = m.data_length;
-    for (int i=0;i<m.data_length;i++) out.data[i]=m.data[i];
+    for (uint8_t i = 0; i < m.data_length; i++) out.data[i] = m.data[i];
     return true;
   }
   void setFilter(uint16_t id, uint16_t mask) override {
-    CAN.filter(CanStandardId(id), mask);
+    CAN.setFilterMask_Standard(mask);
+    CAN.setFilterId_Standard(0, id);
   }
 };
 
