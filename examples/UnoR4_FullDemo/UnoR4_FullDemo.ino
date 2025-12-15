@@ -1,6 +1,5 @@
 #include <Arduino.h>
 #include <Arduino_CAN.h>
-#include "transport/ICanBus.h"
 #include "MKSServoE.h"
 
 class UnoR4CanBus : public ICanBus {
