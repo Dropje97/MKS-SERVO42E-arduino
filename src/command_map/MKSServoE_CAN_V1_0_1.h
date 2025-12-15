@@ -1,4 +1,3 @@
-\
 #pragma once
 #include <stdint.h>
 
@@ -25,6 +24,7 @@ namespace MKS {
 
   // Write/Set parameter commands
   static constexpr uint8_t CMD_WRITE_IO_PORT           = 0x36;
+  static constexpr uint8_t CMD_CALIBRATE_ENCODER       = 0x80;
   static constexpr uint8_t CMD_SET_MODE                = 0x82;
   static constexpr uint8_t CMD_SET_CURRENT_MA          = 0x83;
   static constexpr uint8_t CMD_SET_MICROSTEP           = 0x84;
@@ -43,6 +43,7 @@ namespace MKS {
   static constexpr uint8_t CMD_SET_HOME_PARAM           = 0x90;
   static constexpr uint8_t CMD_GO_HOME                  = 0x91;
   static constexpr uint8_t CMD_SET_AXIS_ZERO            = 0x92;
+  static constexpr uint8_t CMD_SET_NOLIMIT_HOME_CURRENT = 0x93;
   static constexpr uint8_t CMD_SET_NOLIMIT_HOME_PARAM   = 0x94;
   static constexpr uint8_t CMD_REMAP_LIMIT_PORT         = 0x9E;
   static constexpr uint8_t CMD_PEND_DIV_OUTPUT          = 0x9F;
