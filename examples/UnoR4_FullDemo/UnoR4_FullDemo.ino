@@ -12,7 +12,9 @@ static void printFrame(const CanFrame &f) {
   Serial.print(f.dlc);
   Serial.print("]: ");
   for (uint8_t i = 0; i < f.dlc; i++) {
-    if (i) Serial.print(' ');
+    if (i) {
+      Serial.print(' ');
+    }
     Serial.print(f.data[i], HEX);
   }
   Serial.println();
