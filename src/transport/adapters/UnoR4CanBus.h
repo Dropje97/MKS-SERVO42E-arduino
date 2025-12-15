@@ -1,9 +1,8 @@
 #pragma once
-#include "../transport/ICanBus.h"
+#include "../ICanBus.h"
 
-#if defined(ARDUINO_ARCH_RENESAS_UNO) || defined(ARDUINO_UNOR4_WIFI) || defined(ARDUINO_UNOR4_MINIMA)
-  #include <Arduino_CAN.h>
-#endif
+#if defined(ARDUINO_UNOR4_MINIMA) || defined(ARDUINO_UNOR4_WIFI)
+#include <Arduino_CAN.h>
 
 class UnoR4CanBus : public ICanBus {
 public:
@@ -13,3 +12,7 @@ public:
   bool read(CanFrame &out) override;
   void setFilter(uint16_t id, uint16_t mask) override;
 };
+
+#else
+#error "UnoR4CanBus requires Arduino UNO R4 (Minima/WiFi)."
+#endif

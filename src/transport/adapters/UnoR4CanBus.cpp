@@ -1,8 +1,6 @@
 #include "UnoR4CanBus.h"
 
-#if defined(ARDUINO_ARCH_RENESAS_UNO) || defined(ARDUINO_UNOR4_WIFI) || defined(ARDUINO_UNOR4_MINIMA)
-
-using arduino::CanMsg;
+#if defined(ARDUINO_UNOR4_MINIMA) || defined(ARDUINO_UNOR4_WIFI)
 
 static CanBitRate toArduinoBitrate(uint32_t bps) {
   switch (bps) {
@@ -32,7 +30,9 @@ bool UnoR4CanBus::read(CanFrame &out) {
   CanMsg msg = CAN.read();
   out.id = msg.id;
   out.dlc = msg.data_length;
-  for (uint8_t i = 0; i < msg.data_length && i < 8; i++) out.data[i] = msg.data[i];
+  for (uint8_t i = 0; i < msg.data_length && i < 8; i++) {
+    out.data[i] = msg.data[i];
+  }
   return true;
 }
 
@@ -41,10 +41,4 @@ void UnoR4CanBus::setFilter(uint16_t id, uint16_t mask) {
   CAN.setFilterId_Standard(0, id);
 }
 
-#else
-bool UnoR4CanBus::begin(uint32_t) { return false; }
-bool UnoR4CanBus::send(const CanFrame&) { return false; }
-bool UnoR4CanBus::available() { return false; }
-bool UnoR4CanBus::read(CanFrame&) { return false; }
-void UnoR4CanBus::setFilter(uint16_t, uint16_t) {}
 #endif
