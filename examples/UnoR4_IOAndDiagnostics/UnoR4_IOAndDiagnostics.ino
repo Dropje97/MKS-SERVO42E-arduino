@@ -40,6 +40,7 @@ void setup() {
   }
 
   servo.setTargetId(kServoId);
+  servo.setTxId(kServoId);
   if (!servo.enable()) {
     Serial.println("Enable failed");
     errorLatched = true;

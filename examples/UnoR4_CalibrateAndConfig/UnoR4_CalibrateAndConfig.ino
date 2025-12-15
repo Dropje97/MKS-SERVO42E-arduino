@@ -27,6 +27,7 @@ void setup() {
   }
 
   servo.setTargetId(kServoId);
+  servo.setTxId(kServoId);
 
   uint8_t status = 0;
   if (!servo.enable()) {

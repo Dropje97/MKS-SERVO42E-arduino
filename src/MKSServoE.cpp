@@ -6,7 +6,7 @@
 MKSServoE::MKSServoE(ICanBus& bus)
 : _bus(bus), _targetId(0x01), _txId(0x01) {}
 
-void MKSServoE::setTargetId(uint16_t id) { _targetId = id; _txId = id; }
+void MKSServoE::setTargetId(uint16_t id) { _targetId = id; }
 void MKSServoE::setTxId(uint16_t id) { _txId = id; }
 
 uint8_t MKSServoE::checksum(const uint8_t* data, uint8_t len) const {
@@ -467,20 +467,23 @@ bool MKSServoE::restart(uint8_t &status, uint32_t timeoutMs) {
 bool MKSServoE::readParam(uint8_t paramCode, uint8_t *dataOut, uint8_t maxLen, uint8_t &outLen, uint32_t timeoutMs) {
   uint8_t payload[1] = { paramCode };
   CanFrame rx{};
-  if (!sendCommand(MKS::CMD_READ_PARAM, payload, 1, paramCode, &rx, timeoutMs)) {
+  if (!sendCommand(MKS::CMD_READ_PARAM, payload, 1, MKS::CMD_READ_PARAM, &rx, timeoutMs)) {
     return false;
   }
-  if (rx.dlc < 2) {
+  if (rx.dlc < 3) {
     return false;
   }
-  uint8_t available = (uint8_t)(rx.dlc - 2);
+  if (rx.data[1] != paramCode) {
+    return false;
+  }
+  uint8_t available = (uint8_t)(rx.dlc - 3);
   outLen = available;
   uint8_t copyLen = available;
   if (copyLen > maxLen) {
     copyLen = maxLen;
   }
   for (uint8_t i = 0; i < copyLen; i++) {
-    dataOut[i] = rx.data[1 + i];
+    dataOut[i] = rx.data[2 + i];
   }
   return true;
 }

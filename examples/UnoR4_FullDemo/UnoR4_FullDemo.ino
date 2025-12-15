@@ -27,6 +27,7 @@ void setup() {
   }
 
   servo.setTargetId(0x01);
+  servo.setTxId(0x01);
   servo.enable();
 }
 
