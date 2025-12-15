@@ -10,13 +10,17 @@ static bool toArduinoBitrate(uint32_t bps, CanBitRate &out) {
     case 250000:  out = CanBitRate::BR_250k;  return true;
     case 500000:  out = CanBitRate::BR_500k;  return true;
     case 1000000: out = CanBitRate::BR_1000k; return true;
-    default: return false;
+    default: {
+      return false;
+    }
   }
 }
 
 bool UnoR4CanBus::begin(uint32_t bitrate) {
   CanBitRate br;
-  if (!toArduinoBitrate(bitrate, br)) return false;
+  if (!toArduinoBitrate(bitrate, br)) {
+    return false;
+  }
   return CAN.begin(br);
 }
 
@@ -30,7 +34,9 @@ bool UnoR4CanBus::available() {
 }
 
 bool UnoR4CanBus::read(CanFrame &out) {
-  if (CAN.available() == 0) return false;
+  if (CAN.available() == 0) {
+    return false;
+  }
   CanMsg msg = CAN.read();
   out.id = msg.getStandardId();
   out.dlc = msg.data_length;
