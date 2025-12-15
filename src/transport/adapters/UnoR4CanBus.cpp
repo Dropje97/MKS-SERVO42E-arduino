@@ -2,33 +2,37 @@
 
 #if defined(ARDUINO_UNOR4_MINIMA) || defined(ARDUINO_UNOR4_WIFI)
 
-static CanBitRate toArduinoBitrate(uint32_t bps) {
+using arduino::CanMsg;
+
+static bool toArduinoBitrate(uint32_t bps, CanBitRate &out) {
   switch (bps) {
-    case 125000:  return CanBitRate::BR_125k;
-    case 250000:  return CanBitRate::BR_250k;
-    case 500000:  return CanBitRate::BR_500k;
-    case 1000000: return CanBitRate::BR_1000k;
-    default:      return CanBitRate::BR_500k;
+    case 125000:  out = CanBitRate::BR_125k;  return true;
+    case 250000:  out = CanBitRate::BR_250k;  return true;
+    case 500000:  out = CanBitRate::BR_500k;  return true;
+    case 1000000: out = CanBitRate::BR_1000k; return true;
+    default: return false;
   }
 }
 
 bool UnoR4CanBus::begin(uint32_t bitrate) {
-  return CAN.begin(toArduinoBitrate(bitrate));
+  CanBitRate br;
+  if (!toArduinoBitrate(bitrate, br)) return false;
+  return CAN.begin(br);
 }
 
 bool UnoR4CanBus::send(const CanFrame &frame) {
-  CanMsg msg(frame.id, frame.dlc, frame.data);
+  CanMsg msg(arduino::CanStandardId(frame.id & 0x7FF), frame.dlc, frame.data);
   return CAN.write(msg) == 1;
 }
 
 bool UnoR4CanBus::available() {
-  return CAN.available() > 0;
+  return CAN.available();
 }
 
 bool UnoR4CanBus::read(CanFrame &out) {
   if (CAN.available() == 0) return false;
   CanMsg msg = CAN.read();
-  out.id = msg.id;
+  out.id = msg.getStandardId();
   out.dlc = msg.data_length;
   for (uint8_t i = 0; i < msg.data_length && i < 8; i++) {
     out.data[i] = msg.data[i];
@@ -36,9 +40,8 @@ bool UnoR4CanBus::read(CanFrame &out) {
   return true;
 }
 
-void UnoR4CanBus::setFilter(uint16_t id, uint16_t mask) {
-  CAN.setFilterMask_Standard(mask);
-  CAN.setFilterId_Standard(0, id);
+void UnoR4CanBus::setFilter(uint16_t, uint16_t) {
+  // Filtering is not stable across Arduino_CAN versions on UNO R4; noop here.
 }
 
 #endif
