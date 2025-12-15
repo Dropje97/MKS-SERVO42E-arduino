@@ -22,7 +22,7 @@ bool UnoR4CanBus::begin(uint32_t bitrate) {
 
 bool UnoR4CanBus::send(const CanFrame &frame) {
   CanMsg msg(arduino::CanStandardId(frame.id & 0x7FF), frame.dlc, frame.data);
-  return CAN.write(msg) == 1;
+  return CAN.write(msg);
 }
 
 bool UnoR4CanBus::available() {
@@ -36,6 +36,9 @@ bool UnoR4CanBus::read(CanFrame &out) {
   out.dlc = msg.data_length;
   for (uint8_t i = 0; i < msg.data_length && i < 8; i++) {
     out.data[i] = msg.data[i];
+  }
+  for (uint8_t i = out.dlc; i < 8; i++) {
+    out.data[i] = 0;
   }
   return true;
 }
