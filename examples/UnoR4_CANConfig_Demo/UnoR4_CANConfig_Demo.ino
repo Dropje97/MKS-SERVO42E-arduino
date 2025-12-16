@@ -10,16 +10,19 @@ unsigned long lastPollMs = 0;
 bool errorLatched = false;
 
 static void safeDisable() {
-  servo.disable();
+  MKSServoE::ERROR rc = servo.disable();
+  if (rc != MKSServoE::ERROR_OK) {
+    Serial.println("Disable command failed");
+  }
   Serial.println("Motor disabled (error)");
   errorLatched = true;
 }
 
 static bool readParamValue(uint8_t code, uint8_t *buf, uint8_t &len) {
   uint8_t outLen = 0;
-  bool ok = servo.readParam(code, buf, len, outLen);
+  MKSServoE::ERROR rc = servo.readParam(code, buf, len, outLen);
   len = outLen;
-  return ok;
+  return rc == MKSServoE::ERROR_OK;
 }
 
 static void printCanConfig() {
@@ -80,15 +83,25 @@ void setup() {
 
   servo.setTargetId(kServoId);
   servo.setTxId(kServoId);
-  if (!servo.enable()) {
+  MKSServoE::ERROR rc = servo.enable();
+  if (rc != MKSServoE::ERROR_OK) {
     Serial.println("Enable failed");
     return;
   }
 
   uint8_t status = 0;
-  servo.setMode(0x05, status);
-  servo.setCurrentMa(1200, status);
-  servo.setMicrostep(16, status);
+  rc = servo.setMode(0x05, status);
+  if (rc != MKSServoE::ERROR_OK) {
+    Serial.println("Mode init failed");
+  }
+  rc = servo.setCurrentMa(1200, status);
+  if (rc != MKSServoE::ERROR_OK) {
+    Serial.println("Current init failed");
+  }
+  rc = servo.setMicrostep(16, status);
+  if (rc != MKSServoE::ERROR_OK) {
+    Serial.println("Microstep init failed");
+  }
 }
 
 void loop() {
@@ -103,7 +116,8 @@ void loop() {
   lastPollMs = now;
 
   uint8_t status = 0;
-  if (!servo.queryBusStatus(status)) {
+  MKSServoE::ERROR rc = servo.queryBusStatus(status);
+  if (rc != MKSServoE::ERROR_OK) {
     Serial.println("Bus status read failed");
     safeDisable();
     return;

@@ -14,10 +14,10 @@ unsigned long moveStartMs = 0;
 uint8_t moveIndex = 0;
 bool errorLatched = false;
 
-static void printStatus(const char *label, bool ok, uint8_t status) {
+static void printStatus(const char *label, MKSServoE::ERROR rc, uint8_t status) {
   Serial.print(label);
   Serial.print(": ");
-  Serial.print(ok ? "ok" : "err");
+  Serial.print(rc == MKSServoE::ERROR_OK ? "ok" : "err");
   Serial.print(" (status=0x");
   Serial.print(status, HEX);
   Serial.println(")");
@@ -25,10 +25,11 @@ static void printStatus(const char *label, bool ok, uint8_t status) {
 
 static void safeDisable() {
   uint8_t status = 0;
-  if (servo.disable()) {
+  MKSServoE::ERROR rc = servo.disable();
+  if (rc == MKSServoE::ERROR_OK) {
     status = 1;
   }
-  printStatus("Disabled (safety)", true, status);
+  printStatus("Disabled (safety)", rc, status);
   errorLatched = true;
 }
 
@@ -37,23 +38,27 @@ static bool sendMove(uint8_t index) {
   bool ok = false;
   switch (index) {
     case 0: {
-      ok = servo.runPositionMode1Relative(0, kSafeSpeedRpm, kSafeAcc, 1600, status);
-      printStatus("Mode1 rel +1600 pulses", ok, status);
+      MKSServoE::ERROR rc = servo.runPositionMode1Relative(0, kSafeSpeedRpm, kSafeAcc, 1600, status);
+      printStatus("Mode1 rel +1600 pulses", rc, status);
+      ok = (rc == MKSServoE::ERROR_OK);
       break;
     }
     case 1: {
-      ok = servo.runPositionMode2Absolute(0, kSafeSpeedRpm, kSafeAcc, 3200, status);
-      printStatus("Mode2 abs 3200 pulses", ok, status);
+      MKSServoE::ERROR rc = servo.runPositionMode2Absolute(0, kSafeSpeedRpm, kSafeAcc, 3200, status);
+      printStatus("Mode2 abs 3200 pulses", rc, status);
+      ok = (rc == MKSServoE::ERROR_OK);
       break;
     }
     case 2: {
-      ok = servo.runPositionMode3RelativeAxis(kSafeSpeedRpm, kSafeAcc, 0x0800, status);
-      printStatus("Mode3 rel +0x0800 axis", ok, status);
+      MKSServoE::ERROR rc = servo.runPositionMode3RelativeAxis(kSafeSpeedRpm, kSafeAcc, 0x0800, status);
+      printStatus("Mode3 rel +0x0800 axis", rc, status);
+      ok = (rc == MKSServoE::ERROR_OK);
       break;
     }
     case 3: {
-      ok = servo.runPositionMode4AbsoluteAxis(kSafeSpeedRpm, kSafeAcc, 0x1000, status);
-      printStatus("Mode4 abs 0x1000 axis", ok, status);
+      MKSServoE::ERROR rc = servo.runPositionMode4AbsoluteAxis(kSafeSpeedRpm, kSafeAcc, 0x1000, status);
+      printStatus("Mode4 abs 0x1000 axis", rc, status);
+      ok = (rc == MKSServoE::ERROR_OK);
       break;
     }
     default: {
@@ -70,9 +75,9 @@ static void printTelemetry() {
   int16_t rpm = 0;
   int64_t pos = 0;
   uint8_t busStatus = 0;
-  bool haveStatus = servo.queryBusStatus(busStatus);
-  bool haveSpeed = servo.readSpeedRpm(rpm);
-  bool havePos = servo.readEncoderAddition(pos);
+  const bool haveStatus = (servo.queryBusStatus(busStatus) == MKSServoE::ERROR_OK);
+  const bool haveSpeed = (servo.readSpeedRpm(rpm) == MKSServoE::ERROR_OK);
+  const bool havePos = (servo.readEncoderAddition(pos) == MKSServoE::ERROR_OK);
   if (haveStatus) {
     Serial.print("Bus status=0x");
     Serial.print(busStatus, HEX);
@@ -101,17 +106,30 @@ void setup() {
   servo.setTargetId(kServoId);
   servo.setTxId(kServoId);
 
-  if (!servo.enable()) {
+  MKSServoE::ERROR rc = servo.enable();
+  if (rc != MKSServoE::ERROR_OK) {
     Serial.println("Enable failed");
     errorLatched = true;
     return;
   }
 
   uint8_t status = 0;
-  servo.setMode(0x05, status);
-  servo.setCurrentMa(1200, status);
-  servo.setMicrostep(16, status);
-  servo.setAxisZero(status);
+  rc = servo.setMode(0x05, status);
+  if (rc != MKSServoE::ERROR_OK) {
+    Serial.println("Mode init failed");
+  }
+  rc = servo.setCurrentMa(1200, status);
+  if (rc != MKSServoE::ERROR_OK) {
+    Serial.println("Current init failed");
+  }
+  rc = servo.setMicrostep(16, status);
+  if (rc != MKSServoE::ERROR_OK) {
+    Serial.println("Microstep init failed");
+  }
+  rc = servo.setAxisZero(status);
+  if (rc != MKSServoE::ERROR_OK) {
+    Serial.println("Axis zero init failed");
+  }
 
   sendMove(moveIndex);
 }

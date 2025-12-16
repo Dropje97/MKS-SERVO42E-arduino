@@ -8,7 +8,8 @@ const uint16_t kServoId = 0x01;
 const bool kWriteUserId = false;           // Set to true to push kDemoUserId.
 const uint32_t kDemoUserId = 0x12345678;   // Demo payload for CMD 0x42 write.
 
-static void printStatus(const char *label, bool ok, uint8_t status) {
+static void printStatus(const char *label, MKSServoE::ERROR rc, uint8_t status) {
+  const bool ok = (rc == MKSServoE::ERROR_OK);
   Serial.print(label);
   Serial.print(": ");
   Serial.print(ok ? "ok" : "err");
@@ -30,12 +31,14 @@ void setup() {
   servo.setTxId(kServoId);
 
   uint8_t status = 0;
-  if (!servo.enable()) {
+  MKSServoE::ERROR rc = servo.enable();
+  if (rc != MKSServoE::ERROR_OK) {
     Serial.println("Bus enable failed");
   }
 
   uint32_t userId = 0;
-  if (servo.readUserId(userId)) {
+  rc = servo.readUserId(userId);
+  if (rc == MKSServoE::ERROR_OK) {
     Serial.print("User ID: 0x");
     Serial.println(userId, HEX);
   } else {
@@ -43,34 +46,32 @@ void setup() {
   }
 
   if (kWriteUserId) {
-    if (servo.writeUserId(kDemoUserId, status)) {
-      printStatus("User ID write", true, status);
-    } else {
-      printStatus("User ID write", false, status);
-    }
+    rc = servo.writeUserId(kDemoUserId, status);
+    printStatus("User ID write", rc, status);
   }
 
-  bool okMode = servo.setMode(0x05, status);
-  printStatus("Mode (05=bus FOC)", okMode, status);
+  rc = servo.setMode(0x05, status);
+  printStatus("Mode (05=bus FOC)", rc, status);
 
-  bool okCurrent = servo.setCurrentMa(1600, status);
-  printStatus("Current (mA)", okCurrent, status);
+  rc = servo.setCurrentMa(1600, status);
+  printStatus("Current (mA)", rc, status);
 
-  bool okMicro = servo.setMicrostep(16, status);
-  printStatus("Microstep", okMicro, status);
+  rc = servo.setMicrostep(16, status);
+  printStatus("Microstep", rc, status);
 
-  bool okDir = servo.setDirection(0, status);
-  printStatus("Direction (0=CW)", okDir, status);
+  rc = servo.setDirection(0, status);
+  printStatus("Direction (0=CW)", rc, status);
 
-  bool okEn = servo.setEnActive(0, status);
-  printStatus("EN active-low", okEn, status);
+  rc = servo.setEnActive(0, status);
+  printStatus("EN active-low", rc, status);
 
-  bool okDelay = servo.setPulseDelay(2, status);
-  printStatus("Pulse delay (20ms)", okDelay, status);
+  rc = servo.setPulseDelay(2, status);
+  printStatus("Pulse delay (20ms)", rc, status);
 
   Serial.println("Running encoder calibration...");
   uint8_t calStatus = 0;
-  if (servo.calibrateEncoder(calStatus)) {
+  rc = servo.calibrateEncoder(calStatus);
+  if (rc == MKSServoE::ERROR_OK) {
     Serial.print("Calibration status: ");
     Serial.println(calStatus); // 0=running,1=success,2=fail
   } else {
@@ -83,7 +84,8 @@ void loop() {
   if (millis() - lastStatus >= 1000) {
     lastStatus = millis();
     uint8_t status = 0;
-    if (servo.queryBusStatus(status)) {
+    MKSServoE::ERROR rc = servo.queryBusStatus(status);
+    if (rc == MKSServoE::ERROR_OK) {
       Serial.print("Bus status: 0x");
       Serial.println(status, HEX);
     }

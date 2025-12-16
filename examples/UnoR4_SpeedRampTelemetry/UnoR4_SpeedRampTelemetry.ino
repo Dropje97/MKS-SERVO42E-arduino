@@ -26,7 +26,8 @@ unsigned long lastTelemetryMs = 0;
 static void startStep() {
   const RampStep &step = kSteps[stepIndex];
   uint8_t status = 0;
-  if (servo.runSpeed(step.dir, step.speed, kAcc, status)) {
+  MKSServoE::ERROR rc = servo.runSpeed(step.dir, step.speed, kAcc, status);
+  if (rc == MKSServoE::ERROR_OK) {
     Serial.print("Speed cmd ");
     Serial.print(step.speed);
     Serial.print("rpm dir=");
@@ -50,14 +51,24 @@ void setup() {
 
   servo.setTargetId(0x01);
   servo.setTxId(0x01);
-  if (!servo.enable()) {
+  MKSServoE::ERROR rc = servo.enable();
+  if (rc != MKSServoE::ERROR_OK) {
     Serial.println("Enable failed");
   }
 
   uint8_t status = 0;
-  servo.setMode(0x05, status);
-  servo.setCurrentMa(1600, status);
-  servo.setMicrostep(16, status);
+  rc = servo.setMode(0x05, status);
+  if (rc != MKSServoE::ERROR_OK) {
+    Serial.println("Mode init failed");
+  }
+  rc = servo.setCurrentMa(1600, status);
+  if (rc != MKSServoE::ERROR_OK) {
+    Serial.println("Current init failed");
+  }
+  rc = servo.setMicrostep(16, status);
+  if (rc != MKSServoE::ERROR_OK) {
+    Serial.println("Microstep init failed");
+  }
 
   stepStartMs = millis();
   startStep();
@@ -75,7 +86,11 @@ void loop() {
     lastTelemetryMs = now;
     int16_t rpm = 0;
     int64_t position = 0;
-    if (servo.readSpeedRpm(rpm) && servo.readEncoderAddition(position)) {
+    MKSServoE::ERROR rc = servo.readSpeedRpm(rpm);
+    if (rc == MKSServoE::ERROR_OK) {
+      rc = servo.readEncoderAddition(position);
+    }
+    if (rc == MKSServoE::ERROR_OK) {
       Serial.print("Telemetry rpm=");
       Serial.print(rpm);
       Serial.print(" pos=");

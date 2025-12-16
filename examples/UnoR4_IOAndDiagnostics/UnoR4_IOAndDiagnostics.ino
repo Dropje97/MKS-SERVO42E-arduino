@@ -25,7 +25,10 @@ static void printIoStatus(uint8_t io) {
 }
 
 static void safeDisable() {
-  servo.disable();
+  MKSServoE::ERROR rc = servo.disable();
+  if (rc != MKSServoE::ERROR_OK) {
+    Serial.println("Disable command failed");
+  }
   Serial.println("Motor disabled (error)");
   errorLatched = true;
 }
@@ -41,16 +44,26 @@ void setup() {
 
   servo.setTargetId(kServoId);
   servo.setTxId(kServoId);
-  if (!servo.enable()) {
+  MKSServoE::ERROR rc = servo.enable();
+  if (rc != MKSServoE::ERROR_OK) {
     Serial.println("Enable failed");
     errorLatched = true;
     return;
   }
 
   uint8_t status = 0;
-  servo.setMode(0x05, status);
-  servo.setCurrentMa(1200, status);
-  servo.setMicrostep(16, status);
+  rc = servo.setMode(0x05, status);
+  if (rc != MKSServoE::ERROR_OK) {
+    Serial.println("Mode init failed");
+  }
+  rc = servo.setCurrentMa(1200, status);
+  if (rc != MKSServoE::ERROR_OK) {
+    Serial.println("Current init failed");
+  }
+  rc = servo.setMicrostep(16, status);
+  if (rc != MKSServoE::ERROR_OK) {
+    Serial.println("Microstep init failed");
+  }
 }
 
 void loop() {
@@ -71,14 +84,24 @@ void loop() {
   int16_t rpm = 0;
   int64_t position = 0;
 
-  bool ok = servo.readIoStatus(io);
-  ok = ok && servo.readInputPulses(pulses);
-  ok = ok && servo.readPositionError(posError);
-  ok = ok && servo.readEnStatus(en);
-  ok = ok && servo.readSpeedRpm(rpm);
-  ok = ok && servo.readEncoderAddition(position);
+  MKSServoE::ERROR rc = servo.readIoStatus(io);
+  if (rc == MKSServoE::ERROR_OK) {
+    rc = servo.readInputPulses(pulses);
+  }
+  if (rc == MKSServoE::ERROR_OK) {
+    rc = servo.readPositionError(posError);
+  }
+  if (rc == MKSServoE::ERROR_OK) {
+    rc = servo.readEnStatus(en);
+  }
+  if (rc == MKSServoE::ERROR_OK) {
+    rc = servo.readSpeedRpm(rpm);
+  }
+  if (rc == MKSServoE::ERROR_OK) {
+    rc = servo.readEncoderAddition(position);
+  }
 
-  if (!ok) {
+  if (rc != MKSServoE::ERROR_OK) {
     Serial.println("Read failed; disabling");
     safeDisable();
     return;

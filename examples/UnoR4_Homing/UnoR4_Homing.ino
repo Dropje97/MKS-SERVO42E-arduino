@@ -16,7 +16,8 @@ unsigned long lastPollMs = 0;
 
 static void requestHome() {
   uint8_t status = 0;
-  if (servo.goHome(status)) {
+  MKSServoE::ERROR rc = servo.goHome(status);
+  if (rc == MKSServoE::ERROR_OK) {
     Serial.print("GoHome status=");
     Serial.println(status);
     if (status == 2) {
@@ -43,17 +44,28 @@ void setup() {
 
   servo.setTargetId(0x01);
   servo.setTxId(0x01);
-  if (!servo.enable()) {
+  MKSServoE::ERROR rc = servo.enable();
+  if (rc != MKSServoE::ERROR_OK) {
     Serial.println("Enable failed");
   }
 
   uint8_t status = 0;
-  servo.setMode(0x05, status);          // Bus closed-loop FOC
-  servo.setCurrentMa(1200, status);
-  servo.setMicrostep(16, status);
+  rc = servo.setMode(0x05, status);          // Bus closed-loop FOC
+  if (rc != MKSServoE::ERROR_OK) {
+    Serial.println("Mode init failed");
+  }
+  rc = servo.setCurrentMa(1200, status);
+  if (rc != MKSServoE::ERROR_OK) {
+    Serial.println("Current init failed");
+  }
+  rc = servo.setMicrostep(16, status);
+  if (rc != MKSServoE::ERROR_OK) {
+    Serial.println("Microstep init failed");
+  }
 
   // trigLevel=0 (low), homeDir=0 (CW), homeSpeed=120rpm, endLimitEnable=1, mode=0
-  if (servo.setHomeConfig(0, 0, 120, 1, 0, status)) {
+  rc = servo.setHomeConfig(0, 0, 120, 1, 0, status);
+  if (rc == MKSServoE::ERROR_OK) {
     Serial.println("Home config set");
   } else {
     Serial.println("Home config failed");
@@ -67,13 +79,18 @@ void loop() {
   if (state == HomeState::Running && now - lastPollMs >= 200) {
     lastPollMs = now;
     uint8_t busStatus = 0;
-    if (servo.queryBusStatus(busStatus)) {
+    MKSServoE::ERROR rc = servo.queryBusStatus(busStatus);
+    if (rc == MKSServoE::ERROR_OK) {
       Serial.print("Homing bus status=0x");
       Serial.println(busStatus, HEX);
       if (busStatus == 1) { // stop -> likely homing complete
         uint8_t status = 0;
-        servo.setAxisZero(status);
-        Serial.println("Homing done, axis zeroed");
+        MKSServoE::ERROR axisRc = servo.setAxisZero(status);
+        if (axisRc == MKSServoE::ERROR_OK) {
+          Serial.println("Homing done, axis zeroed");
+        } else {
+          Serial.println("Axis zero command failed");
+        }
         state = HomeState::Done;
       } else if (busStatus == 0) {
         Serial.println("Homing failed (bus status 0)");

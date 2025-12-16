@@ -30,7 +30,10 @@ void setup() {
 
   servo.setTargetId(0x01);
   servo.setTxId(0x01);
-  servo.enable();
+  MKSServoE::ERROR rc = servo.enable();
+  if (rc != MKSServoE::ERROR_OK) {
+    Serial.println("Servo enable failed");
+  }
 }
 
 void loop() {
@@ -44,7 +47,8 @@ void loop() {
   if (millis() - lastQueryMs >= 1000) {
     lastQueryMs = millis();
     uint8_t status = 0;
-    if (servo.queryBusStatus(status)) {
+    MKSServoE::ERROR rc = servo.queryBusStatus(status);
+    if (rc == MKSServoE::ERROR_OK) {
       Serial.print("Status: 0x");
       Serial.println(status, HEX);
     } else {
