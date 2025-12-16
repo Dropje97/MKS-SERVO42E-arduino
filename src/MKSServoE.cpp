@@ -92,8 +92,8 @@ MKSServoE::ERROR MKSServoE::sendStatusCommand(uint8_t cmd, const uint8_t *payloa
     return ERROR_BAD_FRAME;
   }
   statusOut = rx.data[1];
-  if (requireStatusSuccess) {
-    return (statusOut == 1) ? ERROR_OK : ERROR_DEVICE_STATUS_FAIL;
+  if (requireStatusSuccess && statusOut == 0) {
+    return ERROR_DEVICE_STATUS_FAIL;
   }
   return ERROR_OK;
 }
