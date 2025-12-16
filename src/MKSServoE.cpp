@@ -84,7 +84,6 @@ MKSServoE::ERROR MKSServoE::sendCommand(uint8_t cmd, const uint8_t *payload, uin
 
 MKSServoE::ERROR MKSServoE::sendStatusCommand(uint8_t cmd, const uint8_t *payload, uint8_t payloadLen, uint8_t &statusOut, uint32_t timeoutMs, bool requireStatusSuccess) {
   CanFrame rx{};
-  (void)requireStatusSuccess;
   MKSServoE::ERROR rc = sendCommand(cmd, payload, payloadLen, cmd, &rx, timeoutMs);
   if (rc != ERROR_OK) {
     return rc;
@@ -93,6 +92,9 @@ MKSServoE::ERROR MKSServoE::sendStatusCommand(uint8_t cmd, const uint8_t *payloa
     return ERROR_BAD_FRAME;
   }
   statusOut = rx.data[1];
+  if (requireStatusSuccess) {
+    return (statusOut == 1) ? ERROR_OK : ERROR_DEVICE_STATUS_FAIL;
+  }
   return ERROR_OK;
 }
 
@@ -308,7 +310,7 @@ MKSServoE::ERROR MKSServoE::setPulseDelay(uint8_t delay, uint8_t &status, uint32
 MKSServoE::ERROR MKSServoE::runSpeed(uint8_t dir, uint16_t speedRpm, uint8_t acc, uint8_t &status, uint32_t timeoutMs) {
   uint8_t payload[3];
   packSpeedFields(dir, speedRpm, acc, payload);
-  return sendStatusCommand(MKS::CMD_SPEED_MODE, payload, 3, status, timeoutMs, /*requireStatusSuccess=*/false);
+  return sendStatusCommand(MKS::CMD_SPEED_MODE, payload, 3, status, timeoutMs);
 }
 
 static void putAxis(uint8_t *buf, int32_t value) {
@@ -344,7 +346,7 @@ MKSServoE::ERROR MKSServoE::runPositionMode4AbsoluteAxis(uint16_t speedRpm, uint
 }
 
 MKSServoE::ERROR MKSServoE::emergencyStop(uint8_t &status, uint32_t timeoutMs) {
-  return sendStatusCommand(MKS::CMD_EMERGENCY_STOP, nullptr, 0, status, timeoutMs, /*requireStatusSuccess=*/false);
+  return sendStatusCommand(MKS::CMD_EMERGENCY_STOP, nullptr, 0, status, timeoutMs);
 }
 
 MKSServoE::ERROR MKSServoE::setHomeConfig(uint8_t trigLevel, uint8_t homeDir, uint16_t homeSpeedRpm, uint8_t endLimitEnable, uint8_t mode, uint8_t &status, uint32_t timeoutMs) {

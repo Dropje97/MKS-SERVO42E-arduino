@@ -4,6 +4,7 @@
 UnoR4CanBus bus;
 MKSServoE servo(bus);
 unsigned long lastQueryMs = 0;
+bool startupFailed = false;
 
 static void printFrame(const CanFrame &f) {
   Serial.print("RX 0x");
@@ -26,17 +27,27 @@ void setup() {
 
   if (!bus.begin(500000)) {
     Serial.println("CAN init failed");
+    startupFailed = true;
+    return;
   }
 
   servo.setTargetId(0x01);
   servo.setTxId(0x01);
   MKSServoE::ERROR rc = servo.enable();
   if (rc != MKSServoE::ERROR_OK) {
-    Serial.println("Servo enable failed");
+    Serial.print("Servo enable failed: ");
+    Serial.println(rc);
+    startupFailed = true;
+    return;
   }
 }
 
 void loop() {
+  if (startupFailed) {
+    delay(100);
+    return;
+  }
+
   while (bus.available()) {
     CanFrame f;
     if (bus.read(f)) {

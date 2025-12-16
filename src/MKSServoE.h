@@ -12,7 +12,8 @@ public:
     ERROR_BAD_FRAME,
     ERROR_BAD_CRC,
     ERROR_BAD_RESPONSE,
-    ERROR_INVALID_ARG
+    ERROR_INVALID_ARG,
+    ERROR_DEVICE_STATUS_FAIL
   };
 
   explicit MKSServoE(ICanBus& bus);
