@@ -1,7 +1,7 @@
 #include <MKSServoE.h>
-#include <transport/adapters/UnoR4CanBus.h>
+#include <transport/adapters/AdapterSelector.h>
 
-UnoR4CanBus bus;
+CanBusAdapter bus;
 MKSServoE servo(bus);
 
 enum class HomeState {
