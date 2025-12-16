@@ -1,66 +1,89 @@
 #pragma once
-#include "../ICanBus.h"
+#include "transport/ICanBus.h"
 
 // Copy/paste template for a new CAN adapter.
 // Rename TemplateCanBusAdapter to match the hardware you wrap (e.g. Mcp2515CanBus).
-// Keep everything in a header or split into .h/.cpp as needed; this header is standalone.
+// Keep everything header-only while drafting; you can later split into .h/.cpp.
 //
-// Checklist for implementing a new adapter:
-// 1) Decide which Arduino CAN library you wrap and include it here.
-//    - Example: #include <MCP2515.h> or the vendor-specific header.
-// 2) Map bitrate values expected by this library to your hardware enum/const.
-//    - Accept the same bitrate units (bps) as the rest of the codebase.
-//    - Provide a lookup similar to UnoR4CanBus::toArduinoBitrate to reject unsupported rates.
-// 3) Implement begin/send/available/read/setFilter to satisfy ICanBus.
-//    - begin(uint32_t bitrate): configure the hardware, return false on failure.
-//    - send(const CanFrame&): send a standard 11-bit frame using the provided id/dlc/data.
-//    - available(): return true when a frame can be read without blocking.
-//    - read(CanFrame& out): fill id, dlc, data[0..7]; zero any unused bytes so callers are safe.
-//    - setFilter(uint16_t id, uint16_t mask): configure acceptance filters; if unsupported, leave a
-//      no-op but document why.
-// 4) Handle DLC and padding:
-//    - Respect the dlc provided by the caller and ensure the underlying library sees the same length.
-//    - If the hardware/library pads frames, explicitly clear unused bytes (see UnoR4CanBus).
-// 5) Add board guards:
-//    - Wrap the implementation with #if defined(BOARD_MACRO) checks so it only builds where valid.
-//    - Place the same guard around any includes that rely on board-specific libraries.
-// 6) Update AdapterSelector.h:
-//    - Add an #elif branch that includes your new header and sets using CanBusAdapter = YourType;
-//    - Keep the error message for unsupported boards untouched.
-// 7) Keep everything non-blocking and avoid dynamic allocation.
+// Checklist (matches UnoR4CanBus conventions):
+// 1) Include the backend CAN library inside the board guard (e.g. <MCP2515.h>).
+// 2) Bitrate mapping: add a helper that converts bps to the backend enum/const.
+//    - Use a switch/lookup like UnoR4CanBus::toArduinoBitrate.
+//    - Return false on unsupported rates so the caller can handle it.
+// 3) CAN IDs: this codebase uses standard 11-bit IDs.
+//    - In send(), mask with (frame.id & 0x7FF) before passing to the backend.
+//    - If the backend returns extended IDs, mask or reject them and document it.
+// 4) Read padding: after copying bytes [0..dlc-1], zero out out.data[dlc..7]
+//    just like UnoR4CanBus::read.
+// 5) Filters: implement setFilter() if the backend supports it. If the API is
+//    unstable or unsupported, keep it as a documented no-op (see UNO R4 comment).
+// 6) Add board guards around includes and implementation so it only builds
+//    where valid, then extend AdapterSelector.h with an #elif branch.
+// 7) Avoid dynamic allocation and keep calls non-blocking.
 
 // Replace this guard with the real board/library check for your adapter.
 #if defined(PLACEHOLDER_BOARD_MACRO)
+
+// Backend-specific bitrate type placeholder; replace with your library's enum.
+using BackendBitrate = uint32_t;
+
+// Map from bps to backend bitrate; return false for unsupported values.
+static bool toBackendBitrate(uint32_t bps, BackendBitrate &out) {
+  switch (bps) {
+    case 125000:  out = bps; return true; // Replace with backend enum.
+    case 250000:  out = bps; return true;
+    case 500000:  out = bps; return true;
+    case 1000000: out = bps; return true;
+    default: {
+      return false;
+    }
+  }
+}
 
 class TemplateCanBusAdapter : public ICanBus {
 public:
   // Initialize the CAN controller at the requested bitrate.
   bool begin(uint32_t bitrate) override {
-    (void)bitrate; // Map to your library-specific enum/values here.
-    return false;  // Replace with the library call result.
+    BackendBitrate br;
+    if (!toBackendBitrate(bitrate, br)) {
+      return false;
+    }
+    (void)br; // TODO: call backend begin/br mapping here.
+    return false;
   }
 
-  // Send a single CAN frame. Return false if the hardware cannot accept it.
+  // Send a single CAN frame (11-bit IDs). Mask to 0x7FF before passing on.
   bool send(const CanFrame &frame) override {
-    (void)frame; // Translate CanFrame to your library's message type.
+    uint16_t standardId = static_cast<uint16_t>(frame.id & 0x7FF);
+    (void)standardId; // TODO: build backend frame and send it.
+    (void)frame;
     return false;
   }
 
   // Non-blocking check for pending frames.
   bool available() override {
-    return false; // Replace with the library's available/readiness check.
+    // TODO: replace with backend available/readiness check.
+    return false;
   }
 
   // Read the next frame into 'out'. Return true only when a frame was read.
   bool read(CanFrame &out) override {
-    (void)out; // Copy id/dlc/data from the library's message into 'out'.
+    // TODO: pull a frame from the backend and populate out.id/out.dlc/out.data.
+    // If the backend delivers extended IDs, mask them to 11-bit or reject.
+    out.id = 0;
+    out.dlc = 0;
+    // Copy payload bytes: for (uint8_t i = 0; i < out.dlc && i < 8; i++) { out.data[i] = backend.data[i]; }
+    for (uint8_t i = out.dlc; i < 8; i++) {
+      out.data[i] = 0;
+    }
     return false;
   }
 
-  // Configure acceptance filters; no-op if the hardware does not support it.
+  // Configure acceptance filters; document if the backend does not support it.
   void setFilter(uint16_t id, uint16_t mask) override {
     (void)id;
     (void)mask;
+    // TODO: apply backend filter setup; keep as no-op if unsupported/unstable.
   }
 };
 
