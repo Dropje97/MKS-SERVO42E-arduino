@@ -48,7 +48,6 @@ MKSServoE::ERROR MKSServoE::waitForResponse(uint8_t expectedCmd, CanFrame &rx, u
       }
       return MKSServoE::ERROR_OK;
     }
-    delay(1);
   }
   return lastError;
 }
