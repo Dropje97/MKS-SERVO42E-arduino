@@ -43,7 +43,9 @@ Keep this file short and actionable. Put project-specific details in a nested `A
 ## Naming conventions
 - **Functions + variables:** lowerCamelCase
 - **Types (struct/class/enum):** PascalCase
-- **Acronyms:** UPPERCASE inside identifiers (e.g., PIDConfig, CANFrame, IMUData)
+- **Acronyms:** inside identifiers
+  - **2-letter:**  UPPERCASE (e.g., IOStream, runUI).
+  - **3+ letter:** capitalize only the first letter (e.g., HttpServer, parseJson).
 - **Constants/macros:** ALL_CAPS (e.g., MAX_RETRIES, SERIAL_BAUD)
 - **Files (non-.ino):** In libraries, the main public header/source match the library name; otherwise keep naming consistent within the repo.
 

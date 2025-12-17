@@ -1,8 +1,0 @@
-{
-  "30": "read encoder",
-  "31": "read position",
-  "32": "read speed",
-  "F1": "bus status",
-  "F3": "enable",
-  "F4": "disable"
-}
