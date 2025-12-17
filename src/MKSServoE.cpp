@@ -454,7 +454,6 @@ MKSServoE::ERROR MKSServoE::writeIoPort(uint8_t almMask, uint8_t pendMask, uint8
   uint8_t payload[2] = { almMask, pendMask };
   return sendStatusCommand(MKS::CMD_WRITE_IO_PORT, payload, 2, status, timeoutMs);
 }
-ar
 MKSServoE::ERROR MKSServoE::restoreDefaults(uint8_t &status, uint32_t timeoutMs) {
   return sendStatusCommand(MKS::CMD_RESTORE_DEFAULTS, nullptr, 0, status, timeoutMs);
 }

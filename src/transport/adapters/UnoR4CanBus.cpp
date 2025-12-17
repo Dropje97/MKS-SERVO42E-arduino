@@ -1,162 +1,68 @@
-#include "AdapterTemplate.h"
+#include "UnoR4CanBus.h"
 
-/*
-  This .cpp shows the recommended "real adapter" layout:
-  - Keep the interface in the .h (class declaration).
-  - Put the method bodies in the .cpp.
+#if defined(ARDUINO_UNOR4_MINIMA) || defined(ARDUINO_UNOR4_WIFI)
 
-  Why have a .cpp at all?
-  - It matches the pattern of UnoR4CanBus.
-  - It keeps headers smaller and avoids accidental multiple-definition mistakes.
-  - It is easier for beginners to see "what to change where".
-
-  IMPORTANT:
-  - This file is guarded by PLACEHOLDER_BOARD_MACRO.
-  - That means the code below is NOT compiled in normal builds.
-  - When you create a real adapter, you replace PLACEHOLDER_BOARD_MACRO with a real guard.
-
-  ALSO IMPORTANT (most common beginner mistake):
-  - Backend library includes must be inside the same guard.
-    Otherwise users on other boards will get compile errors because the backend library isn't installed.
-*/
-
-#if defined(PLACEHOLDER_BOARD_MACRO)
-
-// TODO: Put your backend library includes HERE, inside the guard.
-// Example:
-//   #include <mcp2515.h>
-//   #include <SomeOtherCanDriver.h>
-
-/*
-  Bitrate mapping helper (mirrors UnoR4CanBus::toArduinoBitrate):
-
-  Goal:
-  - Convert generic bps (uint32_t) into whatever your backend expects.
-
-  Pattern:
-  - switch(bps)
-  - set 'out'
-  - return true
-  - default: return false (unsupported bitrate)
-*/
-bool TemplateCanBusAdapter::toBackendBitrate(uint32_t bps, BackendBitrate &out) {
+namespace {
+bool toArduinoBitrate(uint32_t bps, CanBitRate &out) {
   switch (bps) {
-    case 125000:  {      out = 125000;      return true;    }
-    case 250000:  {      out = 250000;      return true;    }
-    case 500000:  {      out = 500000;      return true;    }
-    case 1000000: {      out = 1000000;     return true;    }
+    case 125000:  { out = CanBitRate::BR_125k;  return true; }
+    case 250000:  { out = CanBitRate::BR_250k;  return true; }
+    case 500000:  { out = CanBitRate::BR_500k;  return true; }
+    case 1000000: { out = CanBitRate::BR_1000k; return true; }
     default: {
       return false;
     }
   }
 }
+} // namespace
 
-/*
-  begin(bitrate):
-  - Map bitrate -> backend bitrate type
-  - Call backend.begin(...)
-*/
-bool TemplateCanBusAdapter::begin(uint32_t bitrate) {
-  BackendBitrate br;
-  if (!toBackendBitrate(bitrate, br)) {
-    // Unsupported bitrate requested by the sketch.
+bool UnoR4CanBus::begin(uint32_t bitrate) {
+  CanBitRate mapped;
+  if (!toArduinoBitrate(bitrate, mapped)) {
     return false;
   }
-  return _backend.begin(br);
+  return CAN.begin(mapped);
 }
 
-/*
-  send(frame):
-  - Validate DLC
-  - Mask ID to standard 11-bit
-  - Convert CanFrame -> backend frame/message type
-*/
-bool TemplateCanBusAdapter::send(const CanFrame &frame) {
-  // DLC must be 0..8.
+bool UnoR4CanBus::send(const CanFrame &frame) {
   if (frame.dlc > 8) {
     return false;
   }
-
-  // Standard 11-bit CAN ID (mask is important).
-  const uint16_t standardId = static_cast<uint16_t>(frame.id & 0x7FF);
-
-  // Build backend message.
-  PlaceholderFrame msg{};
-  msg.id = standardId;
-  msg.dlc = frame.dlc;
-
-  // Copy payload bytes.
-  for (uint8_t i = 0; i < msg.dlc; i++) {
-    msg.data[i] = frame.data[i];
+  uint8_t data[8] = {0};
+  for (uint8_t i = 0; i < frame.dlc; i++) {
+    data[i] = frame.data[i];
   }
-
-  // Zero padding bytes (avoid stale data).
-  for (uint8_t i = msg.dlc; i < 8; i++) {
-    msg.data[i] = 0;
-  }
-
-  return _backend.send(msg);
+  CanMsg msg(CanStandardId(frame.id), frame.dlc, data);
+  return CAN.write(msg) > 0;
 }
 
-/*
-  available():
-  - Return whether there is at least one frame to read.
-*/
-bool TemplateCanBusAdapter::available() {
-  return _backend.available();
+bool UnoR4CanBus::available() {
+  return CAN.available() > 0;
 }
 
-/*
-  read(out):
-  - Return false if nothing available
-  - Read one backend frame
-  - Validate DLC
-  - Fill CanFrame fields
-  - Copy bytes + zero padding bytes
-*/
-bool TemplateCanBusAdapter::read(CanFrame &out) {
-  if (!_backend.available()) {
+bool UnoR4CanBus::read(CanFrame &out) {
+  if (CAN.available() == 0) {
     return false;
   }
-
-  const PlaceholderFrame msg = _backend.read();
-
-  // DLC must be 0..8.
-  if (msg.dlc > 8) {
+  CanMsg msg = CAN.read();
+  if (msg.data_length > 8) {
     return false;
   }
-
-  // Standard 11-bit ID:
-  // If your backend returns extended IDs and you want to reject them,
-  // do that here. For now we mask to 11-bit like UNO R4 send() does.
-  out.id = static_cast<uint16_t>(msg.id & 0x7FF);
-  out.dlc = msg.dlc;
-
-  // Copy payload bytes.
+  out.id = static_cast<uint16_t>(msg.getStandardId());
+  out.dlc = msg.data_length;
   for (uint8_t i = 0; i < out.dlc; i++) {
     out.data[i] = msg.data[i];
   }
-
-  // Zero padding bytes.
   for (uint8_t i = out.dlc; i < 8; i++) {
     out.data[i] = 0;
   }
-
   return true;
 }
 
-/*
-  setFilter(id, mask):
-  - If your backend supports filters, call it here.
-  - If not, keep it as a no-op and add a short comment (like UNO R4).
-*/
-void TemplateCanBusAdapter::setFilter(uint16_t id, uint16_t mask) {
-  // If supported:
-  // _backend.setFilter(id, mask);
-
-  // If unsupported/unstable, keep no-op but accept parameters:
+void UnoR4CanBus::setFilter(uint16_t id, uint16_t mask) {
+  // UNO R4 CAN filter API is not exposed in Arduino_CAN; parameters are unused.
   (void)id;
   (void)mask;
 }
 
-#endif // defined(PLACEHOLDER_BOARD_MACRO)
+#endif // defined(ARDUINO_UNOR4_MINIMA) || defined(ARDUINO_UNOR4_WIFI)

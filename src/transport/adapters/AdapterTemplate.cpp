@@ -1,8 +1,26 @@
 // Empty translation unit unless explicitly enabled for experimentation.
+// This file carries the full "real adapter" guidance that used to live in UnoR4CanBus.cpp.
+// Use it as a blueprint when building a concrete adapter for a different board/driver.
 #if defined(PLACEHOLDER_BOARD_MACRO)
 
 #include "AdapterTemplate.h"
 // TODO: add backend includes here (e.g. <MCP2515.h>) once you enable this template.
+
+/*
+  Recommended layout for real adapters:
+  - Keep the interface/declarations in the .h.
+  - Put the method bodies in this .cpp under the appropriate board guard.
+
+  Why keep a .cpp:
+  - Keeps headers smaller and avoids accidental multiple-definition issues.
+  - Clear separation makes it easier for beginners to see where to edit.
+
+  Important guard notes:
+  - This file is wrapped in PLACEHOLDER_BOARD_MACRO, so it is not built by default.
+  - When creating a real adapter, replace that guard with your board macro(s).
+  - Backend driver includes must live inside the same guard to avoid build errors
+    for users on boards without that backend installed.
+*/
 
 // NOTE: AdapterTemplate.h currently keeps everything inline for easy copy/paste.
 // If you want out-of-line definitions, remove the inline bodies in the header,
