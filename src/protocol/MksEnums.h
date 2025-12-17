@@ -47,12 +47,12 @@ namespace MKS {
     // Closed-loop pulse/dir
     PulseDir_ClosedLoop                = 0x03,
 
-    // RS485 open-loop
-    RS485_OpenLoop_WithEncoder         = 0x04, // X4
-    RS485_OpenLoop_WithoutEncoder      = 0x14, // X4 with X=1
+    // CAN open-loop
+    Can_OpenLoop_WithEncoder           = 0x04, // X4
+    Can_OpenLoop_WithoutEncoder        = 0x14, // X4 with X=1
 
-    // RS485 closed-loop
-    RS485_ClosedLoop                   = 0x05,
+    // CAN closed-loop
+    Can_ClosedLoop                     = 0x05,
   };
 
   // ---------------------------------------------------------------------------
@@ -255,9 +255,9 @@ namespace MKS {
   };
 
   // ---------------------------------------------------------------------------
-  // PEND pulse division output (CMD_PEND_DIV_OUTPUT / 0x9F)
+  // PEND pulse division output (CMD_SET_PULSE_DIV_OUTPUT / 0x9F)
   // ---------------------------------------------------------------------------
-  enum class PendDivStartLevel : uint8_t {
+  enum class PulseDivStartLevel : uint8_t {
     StartLow  = 0x00, // default
     StartHigh = 0x01,
   };
