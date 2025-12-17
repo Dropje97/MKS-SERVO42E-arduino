@@ -447,14 +447,14 @@ MKSServoE::ERROR MKSServoE::setPendDivOutput(const uint8_t *payload, uint8_t pay
   if (payloadLen > 6) {
     return ERROR_INVALID_ARG;
   }
-  return sendStatusCommand(MKS::CMD_PEND_DIV_OUTPUT, payload, payloadLen, status, timeoutMs);
+  return sendStatusCommand(MKS::CMD_SET_PULSE_DIV_OUTPUT, payload, payloadLen, status, timeoutMs);
 }
 
 MKSServoE::ERROR MKSServoE::writeIoPort(uint8_t almMask, uint8_t pendMask, uint8_t &status, uint32_t timeoutMs) {
   uint8_t payload[2] = { almMask, pendMask };
   return sendStatusCommand(MKS::CMD_WRITE_IO_PORT, payload, 2, status, timeoutMs);
 }
-
+ar
 MKSServoE::ERROR MKSServoE::restoreDefaults(uint8_t &status, uint32_t timeoutMs) {
   return sendStatusCommand(MKS::CMD_RESTORE_DEFAULTS, nullptr, 0, status, timeoutMs);
 }
