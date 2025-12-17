@@ -4,30 +4,31 @@
 // Command byte (byte1) values from "MKS SERVO42E/57E CAN User Manual V1.0.1"
 namespace MKS {
   // Read commands
-  static constexpr uint8_t CMD_READ_ENCODER_CARRY      = 0x30;
-  static constexpr uint8_t CMD_READ_ENCODER_ADDITION   = 0x31;
-  static constexpr uint8_t CMD_READ_SPEED_RPM          = 0x32;
-  static constexpr uint8_t CMD_READ_INPUT_PULSES       = 0x33;
-  static constexpr uint8_t CMD_READ_IO_STATUS          = 0x34;
-  static constexpr uint8_t CMD_READ_POS_ERROR          = 0x39;
-  static constexpr uint8_t CMD_READ_EN_STATUS          = 0x3A;
-  static constexpr uint8_t CMD_RELEASE_STALL_PROTECT   = 0x3D;
-  static constexpr uint8_t CMD_READ_STALL_STATE        = 0x3E;
-  static constexpr uint8_t CMD_RESTORE_DEFAULTS        = 0x3F;
-  static constexpr uint8_t CMD_READ_VERSION_INFO       = 0x40;
-  static constexpr uint8_t CMD_RESTART                 = 0x41;
-  static constexpr uint8_t CMD_WRITE_USER_ID           = 0x42;
-  static constexpr uint8_t CMD_READ_USER_ID            = 0x42;
+  static constexpr uint8_t CMD_READ_ENCODER_CARRY       = 0x30;
+  static constexpr uint8_t CMD_READ_ENCODER_ADDITION    = 0x31;
+  static constexpr uint8_t CMD_READ_SPEED_RPM           = 0x32;
+  static constexpr uint8_t CMD_READ_INPUT_PULSES        = 0x33;
+  static constexpr uint8_t CMD_READ_IO_STATUS           = 0x34;
+  static constexpr uint8_t CMD_READ_POS_ERROR           = 0x39;
+  static constexpr uint8_t CMD_READ_EN_STATUS           = 0x3A;
+  static constexpr uint8_t CMD_RELEASE_STALL_PROTECT    = 0x3D;
+  static constexpr uint8_t CMD_READ_STALL_STATE         = 0x3E;
+  static constexpr uint8_t CMD_RESTORE_DEFAULTS         = 0x3F;
+  static constexpr uint8_t CMD_READ_VERSION_INFO        = 0x40;
+  static constexpr uint8_t CMD_RESTART                  = 0x41;
+  static constexpr uint8_t CMD_USER_ID                  = 0x42; // read/write depends on frame direction
+  static constexpr uint8_t CMD_WRITE_USER_ID            = CMD_USER_ID;
+  static constexpr uint8_t CMD_READ_USER_ID             = CMD_USER_ID;
 
   // Parameter read (special)
-  static constexpr uint8_t CMD_READ_PARAM              = 0x00;
+  static constexpr uint8_t CMD_READ_PARAM               = 0x00;
 
   // Write/Set parameter commands
-  static constexpr uint8_t CMD_WRITE_IO_PORT           = 0x36;
-  static constexpr uint8_t CMD_CALIBRATE_ENCODER       = 0x80;
-  static constexpr uint8_t CMD_SET_MODE                = 0x82;
-  static constexpr uint8_t CMD_SET_CURRENT_MA          = 0x83;
-  static constexpr uint8_t CMD_SET_MICROSTEP           = 0x84;
+  static constexpr uint8_t CMD_WRITE_IO_PORT            = 0x36;
+  static constexpr uint8_t CMD_CALIBRATE_ENCODER        = 0x80;
+  static constexpr uint8_t CMD_SET_MODE                 = 0x82;
+  static constexpr uint8_t CMD_SET_CURRENT_MA           = 0x83;
+  static constexpr uint8_t CMD_SET_MICROSTEP            = 0x84;
   static constexpr uint8_t CMD_SET_EN_ACTIVE            = 0x85;
   static constexpr uint8_t CMD_SET_DIR                  = 0x86;
   static constexpr uint8_t CMD_SET_PULSE_DELAY          = 0x87;
@@ -46,7 +47,7 @@ namespace MKS {
   static constexpr uint8_t CMD_SET_NOLIMIT_HOME_CURRENT = 0x93;
   static constexpr uint8_t CMD_SET_NOLIMIT_HOME_PARAM   = 0x94;
   static constexpr uint8_t CMD_REMAP_LIMIT_PORT         = 0x9E;
-  static constexpr uint8_t CMD_PEND_DIV_OUTPUT          = 0x9F;
+  static constexpr uint8_t CMD_SET_PULSE_DIV_OUTPUT     = 0x9F;   // Maps PEND as pulse division output
 
   // Bus-control run commands
   static constexpr uint8_t CMD_QUERY_STATUS             = 0xF1;
@@ -60,7 +61,4 @@ namespace MKS {
   static constexpr uint8_t CMD_POS_MODE2_ABS_PULSES     = 0xFE;
 
   static constexpr uint8_t CMD_SAVE_CLEAN_SPEEDMODE     = 0xFF;
-
-  // Some ops return status code 0x93 in the manual (used as a generic status response in some sections).
-  static constexpr uint8_t RSP_GENERIC_STATUS_93        = 0x93;
 }
