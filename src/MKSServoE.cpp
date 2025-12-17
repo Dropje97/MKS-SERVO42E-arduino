@@ -4,7 +4,7 @@
 #include "protocol/MksCrc.h"
 
 MKSServoE::MKSServoE(ICanBus& bus)
-: _bus(bus), _targetId(0x01), _txId(0x01) {}
+: _bus(bus), _targetId(0x01), _txId(0x01), _slots(), _reservedCmds{0}, _nextSequence(0) {}
 
 void MKSServoE::setTargetId(uint16_t id) { _targetId = id; }
 void MKSServoE::setTxId(uint16_t id) { _txId = id; }
@@ -21,57 +21,227 @@ bool MKSServoE::validateCrc(const CanFrame &frame) const {
   return calc == frame.data[frame.dlc - 1];
 }
 
-MKSServoE::ERROR MKSServoE::waitForResponse(uint8_t expectedCmd, CanFrame &rx, uint32_t timeoutMs) {
-  unsigned long start = millis();
-  MKSServoE::ERROR lastError = MKSServoE::ERROR_TIMEOUT;
-  while ((millis() - start) <= timeoutMs) {
-    if (_bus.available()) {
-      if (!_bus.read(rx)) {
-        lastError = MKSServoE::ERROR_BAD_RESPONSE;
-        continue;
-      }
-      if (rx.id != _targetId) {
-        lastError = MKSServoE::ERROR_BAD_RESPONSE;
-        continue;
-      }
-      if (rx.dlc == 0) {
-        lastError = MKSServoE::ERROR_BAD_FRAME;
-        continue;
-      }
-      if (rx.data[0] != expectedCmd) {
-        lastError = MKSServoE::ERROR_BAD_RESPONSE;
-        continue;
-      }
-      if (!validateCrc(rx)) {
-        lastError = MKSServoE::ERROR_BAD_CRC;
-        continue;
-      }
-      return MKSServoE::ERROR_OK;
+void MKSServoE::clearSlot(uint8_t slotIndex) {
+  if (slotIndex >= RESPONSE_QUEUE_SLOTS) {
+    return;
+  }
+  ResponseSlot &slot = _slots[slotIndex];
+  slot.used = false;
+  slot.cmd = 0;
+  slot.head = 0;
+  slot.count = 0;
+  for (uint8_t i = 0; i < RESPONSE_QUEUE_DEPTH; i++) {
+    slot.sequence[i] = 0;
+  }
+}
+
+int8_t MKSServoE::findSlot(uint8_t cmd) const {
+  for (uint8_t i = 0; i < RESPONSE_QUEUE_SLOTS; i++) {
+    if (_slots[i].used && _slots[i].cmd == cmd) {
+      return (int8_t)i;
     }
   }
-  return lastError;
+  return -1;
+}
+
+bool MKSServoE::isReserved(uint8_t cmd) const {
+  uint8_t index = (uint8_t)(cmd >> 3);
+  if (index >= sizeof(_reservedCmds)) {
+    return false;
+  }
+  uint8_t mask = (uint8_t)(1 << (cmd & 0x07));
+  return (_reservedCmds[index] & mask) != 0;
+}
+
+void MKSServoE::setReserved(uint8_t cmd) {
+  uint8_t index = (uint8_t)(cmd >> 3);
+  if (index >= sizeof(_reservedCmds)) {
+    return;
+  }
+  uint8_t mask = (uint8_t)(1 << (cmd & 0x07));
+  _reservedCmds[index] |= mask;
+}
+
+void MKSServoE::clearReserved(uint8_t cmd) {
+  uint8_t index = (uint8_t)(cmd >> 3);
+  if (index >= sizeof(_reservedCmds)) {
+    return;
+  }
+  uint8_t mask = (uint8_t)(1 << (cmd & 0x07));
+  _reservedCmds[index] &= (uint8_t)~mask;
+}
+
+int8_t MKSServoE::allocateSlot(uint8_t cmd) {
+  int8_t existing = findSlot(cmd);
+  if (existing >= 0) {
+    return existing;
+  }
+
+  for (uint8_t i = 0; i < RESPONSE_QUEUE_SLOTS; i++) {
+    if (!_slots[i].used) {
+      _slots[i].used = true;
+      _slots[i].cmd = cmd;
+      _slots[i].head = 0;
+      _slots[i].count = 0;
+      return (int8_t)i;
+    }
+  }
+
+  int8_t candidate = -1;
+  uint32_t bestSeq = 0xFFFFFFFFu;
+  for (uint8_t i = 0; i < RESPONSE_QUEUE_SLOTS; i++) {
+    if (!_slots[i].used || _slots[i].count == 0) {
+      continue;
+    }
+    if (isReserved(_slots[i].cmd)) {
+      continue;
+    }
+    uint32_t seq = _slots[i].sequence[_slots[i].head];
+    if (seq < bestSeq) {
+      bestSeq = seq;
+      candidate = (int8_t)i;
+    }
+  }
+
+  if (candidate == -1) {
+    for (uint8_t i = 0; i < RESPONSE_QUEUE_SLOTS; i++) {
+      if (!_slots[i].used || _slots[i].count == 0) {
+        continue;
+      }
+      uint32_t seq = _slots[i].sequence[_slots[i].head];
+      if (seq < bestSeq) {
+        bestSeq = seq;
+        candidate = (int8_t)i;
+      }
+    }
+  }
+
+  if (candidate >= 0) {
+    // Prefer non-reserved slots; if all are reserved, evict the oldest slot.
+    clearSlot((uint8_t)candidate);
+    ResponseSlot &slot = _slots[candidate];
+    slot.used = true;
+    slot.cmd = cmd;
+    slot.head = 0;
+    slot.count = 0;
+  }
+  return candidate;
+}
+
+void MKSServoE::enqueueFrame(uint8_t slotIndex, const CanFrame &frame) {
+  if (slotIndex >= RESPONSE_QUEUE_SLOTS) {
+    return;
+  }
+  ResponseSlot &slot = _slots[slotIndex];
+  if (slot.count == RESPONSE_QUEUE_DEPTH) {
+    slot.head = (uint8_t)((slot.head + 1) % RESPONSE_QUEUE_DEPTH);
+    slot.count--;
+  }
+  uint8_t tail = (uint8_t)((slot.head + slot.count) % RESPONSE_QUEUE_DEPTH);
+  slot.frames[tail] = frame;
+  slot.sequence[tail] = _nextSequence++;
+  slot.count++;
+  slot.used = true;
+  slot.cmd = frame.data[0];
+}
+
+bool MKSServoE::popFrame(uint8_t slotIndex, CanFrame &outFrame) {
+  if (slotIndex >= RESPONSE_QUEUE_SLOTS) {
+    return false;
+  }
+  ResponseSlot &slot = _slots[slotIndex];
+  if (!slot.used || slot.count == 0) {
+    return false;
+  }
+  outFrame = slot.frames[slot.head];
+  slot.head = (uint8_t)((slot.head + 1) % RESPONSE_QUEUE_DEPTH);
+  slot.count--;
+  if (slot.count == 0) {
+    clearSlot(slotIndex);
+  }
+  return true;
+}
+
+void MKSServoE::poll(uint8_t maxFrames) {
+  uint8_t handled = 0;
+  while (handled < maxFrames && _bus.available()) {
+    CanFrame rx{};
+    if (!_bus.read(rx)) {
+      break;
+    }
+    handled++;
+    if (rx.dlc < 2) {
+      continue;
+    }
+    if (rx.id != _targetId) {
+      continue;
+    }
+    if (!validateCrc(rx)) {
+      continue;
+    }
+    int8_t slotIndex = allocateSlot(rx.data[0]);
+    if (slotIndex >= 0) {
+      enqueueFrame((uint8_t)slotIndex, rx);
+    }
+  }
 }
 
 MKSServoE::ERROR MKSServoE::pollResponse(uint8_t expectedCmd, CanFrame &rx) {
-  if (!_bus.available()) {
+  poll(DEFAULT_MAX_FRAMES);
+  int8_t slotIndex = findSlot(expectedCmd);
+  if (slotIndex < 0) {
     return ERROR_NO_RESPONSE_AVAILABLE;
   }
-  if (!_bus.read(rx)) {
-    return ERROR_BAD_RESPONSE;
+  if (!popFrame((uint8_t)slotIndex, rx)) {
+    return ERROR_NO_RESPONSE_AVAILABLE;
   }
-  if (rx.id != _targetId) {
-    return ERROR_BAD_RESPONSE;
-  }
-  if (rx.dlc == 0) {
-    return ERROR_BAD_FRAME;
-  }
-  if (!validateCrc(rx)) {
-    return ERROR_BAD_CRC;
-  }
-  if (rx.data[0] != expectedCmd) {
-    return ERROR_BAD_RESPONSE;
-  }
+  clearReserved(expectedCmd);
   return ERROR_OK;
+}
+
+MKSServoE::ERROR MKSServoE::pollAnyResponse(uint8_t &cmdOut, CanFrame &rx, bool skipReserved) {
+  poll(DEFAULT_MAX_FRAMES);
+  // Select the oldest eligible head-of-queue frame across all commands.
+  int8_t candidate = -1;
+  uint32_t bestSeq = 0xFFFFFFFFu;
+  for (uint8_t i = 0; i < RESPONSE_QUEUE_SLOTS; i++) {
+    if (!_slots[i].used || _slots[i].count == 0) {
+      continue;
+    }
+    uint8_t cmd = _slots[i].cmd;
+    if (skipReserved && isReserved(cmd)) {
+      continue;
+    }
+    uint32_t seq = _slots[i].sequence[_slots[i].head];
+    if (candidate == -1 || seq < bestSeq) {
+      bestSeq = seq;
+      candidate = (int8_t)i;
+    }
+  }
+  if (candidate < 0) {
+    return ERROR_NO_RESPONSE_AVAILABLE;
+  }
+  cmdOut = _slots[candidate].cmd;
+  if (!popFrame((uint8_t)candidate, rx)) {
+    return ERROR_NO_RESPONSE_AVAILABLE;
+  }
+  clearReserved(cmdOut);
+  return ERROR_OK;
+}
+
+MKSServoE::ERROR MKSServoE::waitForResponse(uint8_t expectedCmd, CanFrame &rx, uint32_t timeoutMs) {
+  setReserved(expectedCmd);
+  const uint32_t start = millis();
+  while ((uint32_t)(millis() - start) <= timeoutMs) {
+    poll(DEFAULT_MAX_FRAMES);
+    int8_t slotIndex = findSlot(expectedCmd);
+    if (slotIndex >= 0 && popFrame((uint8_t)slotIndex, rx)) {
+      clearReserved(expectedCmd);
+      return ERROR_OK;
+    }
+  }
+  clearReserved(expectedCmd);
+  return ERROR_TIMEOUT;
 }
 
 MKSServoE::ERROR MKSServoE::sendCommand(uint8_t cmd, const uint8_t *payload, uint8_t payloadLen, uint8_t expectedRespCmd, CanFrame *response, uint32_t timeoutMs) {
@@ -106,7 +276,12 @@ MKSServoE::ERROR MKSServoE::sendCommand(uint8_t cmd, const uint8_t *payload, uin
 MKSServoE::ERROR MKSServoE::sendStatusCommand(uint8_t cmd, const uint8_t *payload, uint8_t payloadLen, uint8_t &statusOut, uint32_t timeoutMs, bool requireStatusSuccess, bool waitForResponse) {
   if (!waitForResponse) {
     statusOut = 0; // clear stale value when firing asynchronously
-    return sendCommand(cmd, payload, payloadLen, cmd, nullptr, timeoutMs);
+    setReserved(cmd);
+    MKSServoE::ERROR asyncRc = sendCommand(cmd, payload, payloadLen, cmd, nullptr, timeoutMs);
+    if (asyncRc != ERROR_OK) {
+      clearReserved(cmd);
+    }
+    return asyncRc;
   }
 
   CanFrame rx{};

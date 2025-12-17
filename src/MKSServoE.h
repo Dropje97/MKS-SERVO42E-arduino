@@ -17,6 +17,10 @@ public:
     ERROR_NO_RESPONSE_AVAILABLE
   };
 
+  static const uint8_t RESPONSE_QUEUE_DEPTH = 3;
+  static const uint8_t RESPONSE_QUEUE_SLOTS = 8;
+  static const uint8_t DEFAULT_MAX_FRAMES = 4;
+
   explicit MKSServoE(ICanBus& bus);
 
   void setTargetId(uint16_t id);
@@ -87,16 +91,39 @@ public:
   ERROR setPendDivOutput(const uint8_t *payload, uint8_t payloadLen, uint8_t &status, uint32_t timeoutMs = 50);
   ERROR saveCleanSpeedMode(bool save, uint8_t &status, uint32_t timeoutMs = 50);
 
+  void poll(uint8_t maxFrames = DEFAULT_MAX_FRAMES);
+  ERROR pollResponse(uint8_t expectedCmd, CanFrame &rx);
+  ERROR pollAnyResponse(uint8_t &cmdOut, CanFrame &rx, bool skipReserved = true);
+
 private:
+  struct ResponseSlot {
+    bool used;
+    uint8_t cmd;
+    uint8_t head;
+    uint8_t count;
+    CanFrame frames[RESPONSE_QUEUE_DEPTH];
+    uint32_t sequence[RESPONSE_QUEUE_DEPTH];
+  };
+
   ICanBus& _bus;
   uint16_t _targetId;
   uint16_t _txId;
+  ResponseSlot _slots[RESPONSE_QUEUE_SLOTS];
+  uint8_t _reservedCmds[32];
+  uint32_t _nextSequence;
 
   uint8_t checksum(const uint8_t* data, uint8_t len) const;
   bool validateCrc(const CanFrame &frame) const;
   ERROR waitForResponse(uint8_t expectedCmd, CanFrame &rx, uint32_t timeoutMs);
-  ERROR pollResponse(uint8_t expectedCmd, CanFrame &rx);
   ERROR sendStatusCommand(uint8_t cmd, const uint8_t *payload, uint8_t payloadLen, uint8_t &statusOut, uint32_t timeoutMs, bool requireStatusSuccess = true, bool waitForResponse = true);
   ERROR sendCommand(uint8_t cmd, const uint8_t *payload, uint8_t payloadLen, uint8_t expectedRespCmd, CanFrame *response, uint32_t timeoutMs);
   void packSpeedFields(uint8_t dir, uint16_t speedRpm, uint8_t acc, uint8_t *outBuf);
+  void clearSlot(uint8_t slotIndex);
+  int8_t findSlot(uint8_t cmd) const;
+  int8_t allocateSlot(uint8_t cmd);
+  void enqueueFrame(uint8_t slotIndex, const CanFrame &frame);
+  bool popFrame(uint8_t slotIndex, CanFrame &outFrame);
+  bool isReserved(uint8_t cmd) const;
+  void setReserved(uint8_t cmd);
+  void clearReserved(uint8_t cmd);
 };
