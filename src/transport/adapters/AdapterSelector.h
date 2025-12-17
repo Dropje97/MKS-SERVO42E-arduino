@@ -6,7 +6,8 @@
 
 #if defined(ARDUINO_UNOR4_MINIMA) || defined(ARDUINO_UNOR4_WIFI)
 #include "UnoR4CanBus.h"
-using CanBusAdapter = UnoR4CanBus;
+#include "../BufferedCanBus.h"
+using CanBusAdapter = BufferedCanBus<UnoR4CanBus>;
 #else
 #error "No supported CAN adapter selected. Add a new adapter in src/transport/adapters/ and extend AdapterSelector.h."
 #endif

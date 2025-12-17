@@ -13,7 +13,8 @@ public:
     ERROR_BAD_CRC,
     ERROR_BAD_RESPONSE,
     ERROR_INVALID_ARG,
-    ERROR_DEVICE_STATUS_FAIL
+    ERROR_DEVICE_STATUS_FAIL,
+    ERROR_NO_RESPONSE_AVAILABLE
   };
 
   explicit MKSServoE(ICanBus& bus);
@@ -57,7 +58,8 @@ public:
   ERROR emergencyStop(uint8_t &status, uint32_t timeoutMs = 50);
 
   ERROR setHomeConfig(uint8_t trigLevel, uint8_t homeDir, uint16_t homeSpeedRpm, uint8_t endLimitEnable, uint8_t mode, uint8_t &status, uint32_t timeoutMs = 50);
-  ERROR goHome(uint8_t &status, uint32_t timeoutMs = 2000);
+  ERROR goHome(uint8_t &status, uint32_t timeoutMs = 2000, bool waitForResponse = true);
+  ERROR pollStatusResponse(uint8_t expectedCmd, uint8_t &statusOut);
   ERROR setAxisZero(uint8_t &status, uint32_t timeoutMs = 50);
   ERROR setNoLimitHomeCurrent(uint16_t currentMa, uint8_t &status, uint32_t timeoutMs = 50);
   ERROR setNoLimitHomeParam(const uint8_t *payload, uint8_t payloadLen, uint8_t &status, uint32_t timeoutMs = 50);
@@ -93,7 +95,8 @@ private:
   uint8_t checksum(const uint8_t* data, uint8_t len) const;
   bool validateCrc(const CanFrame &frame) const;
   ERROR waitForResponse(uint8_t expectedCmd, CanFrame &rx, uint32_t timeoutMs);
-  ERROR sendStatusCommand(uint8_t cmd, const uint8_t *payload, uint8_t payloadLen, uint8_t &statusOut, uint32_t timeoutMs, bool requireStatusSuccess = true);
+  ERROR pollResponse(uint8_t expectedCmd, CanFrame &rx);
+  ERROR sendStatusCommand(uint8_t cmd, const uint8_t *payload, uint8_t payloadLen, uint8_t &statusOut, uint32_t timeoutMs, bool requireStatusSuccess = true, bool waitForResponse = true);
   ERROR sendCommand(uint8_t cmd, const uint8_t *payload, uint8_t payloadLen, uint8_t expectedRespCmd, CanFrame *response, uint32_t timeoutMs);
   void packSpeedFields(uint8_t dir, uint16_t speedRpm, uint8_t acc, uint8_t *outBuf);
 };

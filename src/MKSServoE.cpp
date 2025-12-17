@@ -52,6 +52,28 @@ MKSServoE::ERROR MKSServoE::waitForResponse(uint8_t expectedCmd, CanFrame &rx, u
   return lastError;
 }
 
+MKSServoE::ERROR MKSServoE::pollResponse(uint8_t expectedCmd, CanFrame &rx) {
+  if (!_bus.available()) {
+    return ERROR_NO_RESPONSE_AVAILABLE;
+  }
+  if (!_bus.read(rx)) {
+    return ERROR_BAD_RESPONSE;
+  }
+  if (rx.id != _targetId) {
+    return ERROR_BAD_RESPONSE;
+  }
+  if (rx.dlc == 0) {
+    return ERROR_BAD_FRAME;
+  }
+  if (!validateCrc(rx)) {
+    return ERROR_BAD_CRC;
+  }
+  if (rx.data[0] != expectedCmd) {
+    return ERROR_BAD_RESPONSE;
+  }
+  return ERROR_OK;
+}
+
 MKSServoE::ERROR MKSServoE::sendCommand(uint8_t cmd, const uint8_t *payload, uint8_t payloadLen, uint8_t expectedRespCmd, CanFrame *response, uint32_t timeoutMs) {
   if (payloadLen > 6) {
     return ERROR_INVALID_ARG; // cmd + payload + crc must fit into 8 bytes
@@ -81,7 +103,12 @@ MKSServoE::ERROR MKSServoE::sendCommand(uint8_t cmd, const uint8_t *payload, uin
   return ERROR_OK;
 }
 
-MKSServoE::ERROR MKSServoE::sendStatusCommand(uint8_t cmd, const uint8_t *payload, uint8_t payloadLen, uint8_t &statusOut, uint32_t timeoutMs, bool requireStatusSuccess) {
+MKSServoE::ERROR MKSServoE::sendStatusCommand(uint8_t cmd, const uint8_t *payload, uint8_t payloadLen, uint8_t &statusOut, uint32_t timeoutMs, bool requireStatusSuccess, bool waitForResponse) {
+  if (!waitForResponse) {
+    statusOut = 0; // clear stale value when firing asynchronously
+    return sendCommand(cmd, payload, payloadLen, cmd, nullptr, timeoutMs);
+  }
+
   CanFrame rx{};
   MKSServoE::ERROR rc = sendCommand(cmd, payload, payloadLen, cmd, &rx, timeoutMs);
   if (rc != ERROR_OK) {
@@ -362,8 +389,11 @@ MKSServoE::ERROR MKSServoE::setHomeConfig(uint8_t trigLevel, uint8_t homeDir, ui
   return sendStatusCommand(MKS::CMD_SET_HOME_PARAM, payload, 6, status, timeoutMs);
 }
 
-MKSServoE::ERROR MKSServoE::goHome(uint8_t &status, uint32_t timeoutMs) {
-  return sendStatusCommand(MKS::CMD_GO_HOME, nullptr, 0, status, timeoutMs, /*requireStatusSuccess=*/false);
+MKSServoE::ERROR MKSServoE::goHome(uint8_t &status, uint32_t timeoutMs, bool waitForResponse) {
+  if (!waitForResponse) {
+    status = 0; // clear stale data when firing without waiting for a reply
+  }
+  return sendStatusCommand(MKS::CMD_GO_HOME, nullptr, 0, status, timeoutMs, /*requireStatusSuccess=*/false, waitForResponse);
 }
 
 MKSServoE::ERROR MKSServoE::setAxisZero(uint8_t &status, uint32_t timeoutMs) {
