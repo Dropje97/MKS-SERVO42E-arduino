@@ -1,7 +1,7 @@
 #pragma once
 #include <stdint.h>
 #include "transport/ICanBus.h"
-#include "command_map/MKSServoE_CAN_V1_0_1.h"
+#include "protocol/MksProtocol.h"
 
 class MKSServoE {
 public:
