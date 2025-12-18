@@ -48,9 +48,12 @@ void loop() {
     return;
   }
 
-  uint8_t cmdOut = 0;
-  CanFrame rx{};
-  while (servo.pollAnyResponse(cmdOut, rx, true) == MKSServoE::ERROR_OK) {
+  for (uint8_t i = 0; i < 4; i++) {
+    uint8_t cmdOut = 0;
+    CanFrame rx{};
+    if (servo.pollAnyResponse(cmdOut, rx, true) != MKSServoE::ERROR_OK) {
+      break;
+    }
     switch (cmdOut) {
       default:
         printFrame(rx);

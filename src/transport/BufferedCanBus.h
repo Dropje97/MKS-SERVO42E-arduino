@@ -18,22 +18,6 @@ public:
     return _bus.send(f);
   }
 
-  bool available() override {
-    poll();
-    return _count > 0;
-  }
-
-  bool read(CanFrame &out) override {
-    poll();
-    if (_count == 0) {
-      return false;
-    }
-    out = _buffer[_tail];
-    _tail = (_tail + 1) % Capacity;
-    _count--;
-    return true;
-  }
-
   void setFilter(uint16_t id, uint16_t mask) override {
     _bus.setFilter(id, mask);
   }
@@ -60,4 +44,22 @@ private:
   size_t _head;
   size_t _tail;
   size_t _count;
+
+  bool available() override {
+    poll();
+    return _count > 0;
+  }
+
+  bool read(CanFrame &out) override {
+    poll();
+    if (_count == 0) {
+      return false;
+    }
+    out = _buffer[_tail];
+    _tail = (_tail + 1) % Capacity;
+    _count--;
+    return true;
+  }
+
+  friend class MKSServoE;
 };
