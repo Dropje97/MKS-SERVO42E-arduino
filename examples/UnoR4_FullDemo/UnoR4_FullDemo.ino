@@ -48,10 +48,13 @@ void loop() {
     return;
   }
 
-  while (bus.available()) {
-    CanFrame f;
-    if (bus.read(f)) {
-      printFrame(f);
+  uint8_t cmdOut = 0;
+  CanFrame rx{};
+  while (servo.pollAnyResponse(cmdOut, rx, true) == MKSServoE::ERROR_OK) {
+    switch (cmdOut) {
+      default:
+        printFrame(rx);
+        break;
     }
   }
 

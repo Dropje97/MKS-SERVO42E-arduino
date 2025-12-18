@@ -105,11 +105,18 @@ private:
     uint32_t sequence[RESPONSE_QUEUE_DEPTH];
   };
 
+  struct DeadlineQueue {
+    uint8_t head;
+    uint8_t count;
+    uint32_t entries[RESPONSE_QUEUE_DEPTH];
+  };
+
   ICanBus& _bus;
   uint16_t _targetId;
   uint16_t _txId;
   ResponseSlot _slots[RESPONSE_QUEUE_SLOTS];
   uint8_t _reservedCount[256];
+  DeadlineQueue _deadlineQueues[256];
   uint32_t _nextSequence;
 
   uint8_t checksum(const uint8_t* data, uint8_t len) const;
@@ -126,4 +133,7 @@ private:
   bool isReserved(uint8_t cmd) const;
   void reserve(uint8_t cmd);
   void unreserve(uint8_t cmd);
+  void pushDeadline(uint8_t cmd, uint32_t deadline);
+  bool popDeadline(uint8_t cmd);
+  void expireDeadlines();
 };

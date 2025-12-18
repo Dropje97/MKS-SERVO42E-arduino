@@ -4,7 +4,7 @@
 #include "protocol/MksCrc.h"
 
 MKSServoE::MKSServoE(ICanBus& bus)
-: _bus(bus), _targetId(0x01), _txId(0x01), _slots(), _reservedCount{0}, _nextSequence(0) {}
+: _bus(bus), _targetId(0x01), _txId(0x01), _slots(), _reservedCount{0}, _deadlineQueues(), _nextSequence(0) {}
 
 void MKSServoE::setTargetId(uint16_t id) { _targetId = id; }
 void MKSServoE::setTxId(uint16_t id) { _txId = id; }
@@ -57,6 +57,45 @@ void MKSServoE::reserve(uint8_t cmd) {
 void MKSServoE::unreserve(uint8_t cmd) {
   if (_reservedCount[cmd] > 0) {
     _reservedCount[cmd]--;
+  }
+}
+
+void MKSServoE::pushDeadline(uint8_t cmd, uint32_t deadline) {
+  DeadlineQueue &queue = _deadlineQueues[cmd];
+  if (queue.count == RESPONSE_QUEUE_DEPTH) {
+    queue.head = (uint8_t)((queue.head + 1) % RESPONSE_QUEUE_DEPTH);
+    queue.count--;
+    unreserve(cmd);
+  }
+  uint8_t tail = (uint8_t)((queue.head + queue.count) % RESPONSE_QUEUE_DEPTH);
+  queue.entries[tail] = deadline;
+  queue.count++;
+}
+
+bool MKSServoE::popDeadline(uint8_t cmd) {
+  DeadlineQueue &queue = _deadlineQueues[cmd];
+  if (queue.count == 0) {
+    return false;
+  }
+  queue.head = (uint8_t)((queue.head + 1) % RESPONSE_QUEUE_DEPTH);
+  queue.count--;
+  return true;
+}
+
+void MKSServoE::expireDeadlines() {
+  uint32_t now = millis();
+  for (uint16_t cmd = 0; cmd < 256; cmd++) {
+    DeadlineQueue &queue = _deadlineQueues[cmd];
+    while (queue.count > 0) {
+      uint32_t deadline = queue.entries[queue.head];
+      if ((uint32_t)(now - deadline) < 0x80000000u) {
+        queue.head = (uint8_t)((queue.head + 1) % RESPONSE_QUEUE_DEPTH);
+        queue.count--;
+        unreserve((uint8_t)cmd);
+      } else {
+        break;
+      }
+    }
   }
 }
 
@@ -151,6 +190,7 @@ bool MKSServoE::popFrame(uint8_t slotIndex, CanFrame &outFrame) {
 }
 
 void MKSServoE::poll(uint8_t maxFrames) {
+  expireDeadlines();
   uint8_t handled = 0;
   while (handled < maxFrames && _bus.available()) {
     CanFrame rx{};
@@ -183,6 +223,7 @@ MKSServoE::ERROR MKSServoE::pollResponse(uint8_t expectedCmd, CanFrame &rx) {
   if (!popFrame((uint8_t)slotIndex, rx)) {
     return ERROR_NO_RESPONSE_AVAILABLE;
   }
+  popDeadline(expectedCmd);
   unreserve(expectedCmd);
   return ERROR_OK;
 }
@@ -212,6 +253,7 @@ MKSServoE::ERROR MKSServoE::pollAnyResponse(uint8_t &cmdOut, CanFrame &rx, bool 
   if (!popFrame((uint8_t)candidate, rx)) {
     return ERROR_NO_RESPONSE_AVAILABLE;
   }
+  popDeadline(cmdOut);
   unreserve(cmdOut);
   return ERROR_OK;
 }
@@ -267,6 +309,9 @@ MKSServoE::ERROR MKSServoE::sendStatusCommand(uint8_t cmd, const uint8_t *payloa
     MKSServoE::ERROR asyncRc = sendCommand(cmd, payload, payloadLen, cmd, nullptr, timeoutMs);
     if (asyncRc != ERROR_OK) {
       unreserve(cmd);
+    } else {
+      uint32_t deadline = millis() + timeoutMs;
+      pushDeadline(cmd, deadline);
     }
     return asyncRc;
   }
