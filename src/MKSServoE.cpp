@@ -4,7 +4,7 @@
 #include "protocol/MksCrc.h"
 
 MKSServoE::MKSServoE(ICanBus& bus)
-: _bus(bus), _targetId(0x01), _txId(0x01), _slots(), _reservedCmds{0}, _nextSequence(0) {}
+: _bus(bus), _targetId(0x01), _txId(0x01), _slots(), _reservedCount{0}, _nextSequence(0) {}
 
 void MKSServoE::setTargetId(uint16_t id) { _targetId = id; }
 void MKSServoE::setTxId(uint16_t id) { _txId = id; }
@@ -45,30 +45,19 @@ int8_t MKSServoE::findSlot(uint8_t cmd) const {
 }
 
 bool MKSServoE::isReserved(uint8_t cmd) const {
-  uint8_t index = (uint8_t)(cmd >> 3);
-  if (index >= sizeof(_reservedCmds)) {
-    return false;
-  }
-  uint8_t mask = (uint8_t)(1 << (cmd & 0x07));
-  return (_reservedCmds[index] & mask) != 0;
+  return _reservedCount[cmd] > 0;
 }
 
-void MKSServoE::setReserved(uint8_t cmd) {
-  uint8_t index = (uint8_t)(cmd >> 3);
-  if (index >= sizeof(_reservedCmds)) {
-    return;
+void MKSServoE::reserve(uint8_t cmd) {
+  if (_reservedCount[cmd] < 255) {
+    _reservedCount[cmd]++;
   }
-  uint8_t mask = (uint8_t)(1 << (cmd & 0x07));
-  _reservedCmds[index] |= mask;
 }
 
-void MKSServoE::clearReserved(uint8_t cmd) {
-  uint8_t index = (uint8_t)(cmd >> 3);
-  if (index >= sizeof(_reservedCmds)) {
-    return;
+void MKSServoE::unreserve(uint8_t cmd) {
+  if (_reservedCount[cmd] > 0) {
+    _reservedCount[cmd]--;
   }
-  uint8_t mask = (uint8_t)(1 << (cmd & 0x07));
-  _reservedCmds[index] &= (uint8_t)~mask;
 }
 
 int8_t MKSServoE::allocateSlot(uint8_t cmd) {
@@ -195,7 +184,7 @@ MKSServoE::ERROR MKSServoE::pollResponse(uint8_t expectedCmd, CanFrame &rx) {
   if (!popFrame((uint8_t)slotIndex, rx)) {
     return ERROR_NO_RESPONSE_AVAILABLE;
   }
-  clearReserved(expectedCmd);
+  unreserve(expectedCmd);
   return ERROR_OK;
 }
 
@@ -225,22 +214,22 @@ MKSServoE::ERROR MKSServoE::pollAnyResponse(uint8_t &cmdOut, CanFrame &rx, bool 
   if (!popFrame((uint8_t)candidate, rx)) {
     return ERROR_NO_RESPONSE_AVAILABLE;
   }
-  clearReserved(cmdOut);
+  unreserve(cmdOut);
   return ERROR_OK;
 }
 
 MKSServoE::ERROR MKSServoE::waitForResponse(uint8_t expectedCmd, CanFrame &rx, uint32_t timeoutMs) {
-  setReserved(expectedCmd);
+  reserve(expectedCmd);
   const uint32_t start = millis();
   while ((uint32_t)(millis() - start) <= timeoutMs) {
     poll(DEFAULT_MAX_FRAMES);
     int8_t slotIndex = findSlot(expectedCmd);
     if (slotIndex >= 0 && popFrame((uint8_t)slotIndex, rx)) {
-      clearReserved(expectedCmd);
+      unreserve(expectedCmd);
       return ERROR_OK;
     }
   }
-  clearReserved(expectedCmd);
+  unreserve(expectedCmd);
   return ERROR_TIMEOUT;
 }
 
@@ -276,10 +265,10 @@ MKSServoE::ERROR MKSServoE::sendCommand(uint8_t cmd, const uint8_t *payload, uin
 MKSServoE::ERROR MKSServoE::sendStatusCommand(uint8_t cmd, const uint8_t *payload, uint8_t payloadLen, uint8_t &statusOut, uint32_t timeoutMs, bool requireStatusSuccess, bool waitForResponse) {
   if (!waitForResponse) {
     statusOut = 0; // clear stale value when firing asynchronously
-    setReserved(cmd);
+    reserve(cmd);
     MKSServoE::ERROR asyncRc = sendCommand(cmd, payload, payloadLen, cmd, nullptr, timeoutMs);
     if (asyncRc != ERROR_OK) {
-      clearReserved(cmd);
+      unreserve(cmd);
     }
     return asyncRc;
   }
@@ -358,7 +347,7 @@ MKSServoE::ERROR MKSServoE::calibrateEncoder(uint8_t& status, uint32_t timeoutMs
 
 MKSServoE::ERROR MKSServoE::writeUserId(uint32_t userId, uint8_t &status, uint32_t timeoutMs) {
   uint8_t payload[4];
-  MKS::put_u32_le(payload, userId);
+  MKS::put_u32_be(payload, userId);
   return sendStatusCommand(MKS::CMD_WRITE_USER_ID, payload, 4, status, timeoutMs);
 }
 
@@ -371,7 +360,7 @@ MKSServoE::ERROR MKSServoE::readUserId(uint32_t &userId, uint32_t timeoutMs) {
   if (rx.dlc < 6) {
     return ERROR_BAD_FRAME;
   }
-  userId = MKS::get_u32_le(&rx.data[1]);
+  userId = MKS::get_u32_be(&rx.data[1]);
   return ERROR_OK;
 }
 
@@ -384,7 +373,7 @@ MKSServoE::ERROR MKSServoE::readSpeedRpm(int16_t &rpm, uint32_t timeoutMs) {
   if (rx.dlc < 4) {
     return ERROR_BAD_FRAME;
   }
-  rpm = (int16_t)((rx.data[2] << 8) | rx.data[1]);
+  rpm = (int16_t)MKS::get_u16_be(&rx.data[1]);
   return ERROR_OK;
 }
 
@@ -397,14 +386,7 @@ MKSServoE::ERROR MKSServoE::readEncoderAddition(int64_t &value, uint32_t timeout
   if (rx.dlc < 8) {
     return ERROR_BAD_FRAME;
   }
-  int64_t v = 0;
-  for (uint8_t i = 0; i < 6; i++) {
-    v |= ((int64_t)rx.data[1 + i]) << (8 * i);
-  }
-  if (rx.data[6] & 0x80) {
-    v |= ((int64_t)0xFFFF) << 48;
-  }
-  value = v;
+  value = MKS::get_i48_be(&rx.data[1]);
   return ERROR_OK;
 }
 
@@ -417,9 +399,9 @@ MKSServoE::ERROR MKSServoE::readEncoderCarry(int32_t &carry, uint16_t &value, ui
   if (rx.dlc < 8) {
     return ERROR_BAD_FRAME;
   }
-  uint32_t c = MKS::get_u32_le(&rx.data[1]);
+  uint32_t c = MKS::get_u32_be(&rx.data[1]);
   carry = (int32_t)c;
-  value = MKS::get_u16_le(&rx.data[5]);
+  value = MKS::get_u16_be(&rx.data[5]);
   return ERROR_OK;
 }
 
@@ -432,7 +414,7 @@ MKSServoE::ERROR MKSServoE::readInputPulses(int32_t &pulses, uint32_t timeoutMs)
   if (rx.dlc < 6) {
     return ERROR_BAD_FRAME;
   }
-  uint32_t raw = MKS::get_u32_le(&rx.data[1]);
+  uint32_t raw = MKS::get_u32_be(&rx.data[1]);
   pulses = (int32_t)raw;
   return ERROR_OK;
 }
@@ -459,7 +441,7 @@ MKSServoE::ERROR MKSServoE::readPositionError(int32_t &error, uint32_t timeoutMs
   if (rx.dlc < 6) {
     return ERROR_BAD_FRAME;
   }
-  uint32_t raw = MKS::get_u32_le(&rx.data[1]);
+  uint32_t raw = MKS::get_u32_be(&rx.data[1]);
   error = (int32_t)raw;
   return ERROR_OK;
 }
@@ -484,7 +466,7 @@ MKSServoE::ERROR MKSServoE::setMode(uint8_t mode, uint8_t &status, uint32_t time
 
 MKSServoE::ERROR MKSServoE::setCurrentMa(uint16_t ma, uint8_t &status, uint32_t timeoutMs) {
   uint8_t payload[2];
-  MKS::put_u16_le(payload, ma);
+  MKS::put_u16_be(payload, ma);
   return sendStatusCommand(MKS::CMD_SET_CURRENT_MA, payload, 2, status, timeoutMs);
 }
 
@@ -515,7 +497,7 @@ MKSServoE::ERROR MKSServoE::runSpeed(uint8_t dir, uint16_t speedRpm, uint8_t acc
 }
 
 static void putAxis(uint8_t *buf, int32_t value) {
-  MKS::put_i24_le(buf, value);
+  MKS::put_i24_be(buf, value);
 }
 
 MKSServoE::ERROR MKSServoE::runPositionMode1Relative(uint8_t dir, uint16_t speedRpm, uint8_t acc, int32_t pulses, uint8_t &status, uint32_t timeoutMs) {
@@ -558,7 +540,7 @@ MKSServoE::ERROR MKSServoE::setHomeConfig(uint8_t trigLevel, uint8_t homeDir, ui
   uint8_t payload[6];
   payload[0] = trigLevel;
   payload[1] = homeDir;
-  MKS::put_u16_le(&payload[2], clamped);
+  MKS::put_u16_be(&payload[2], clamped);
   payload[4] = endLimitEnable;
   payload[5] = mode;
   return sendStatusCommand(MKS::CMD_SET_HOME_PARAM, payload, 6, status, timeoutMs);
@@ -577,7 +559,7 @@ MKSServoE::ERROR MKSServoE::setAxisZero(uint8_t &status, uint32_t timeoutMs) {
 
 MKSServoE::ERROR MKSServoE::setNoLimitHomeCurrent(uint16_t currentMa, uint8_t &status, uint32_t timeoutMs) {
   uint8_t payload[2];
-  MKS::put_u16_le(payload, currentMa);
+  MKS::put_u16_be(payload, currentMa);
   return sendStatusCommand(MKS::CMD_SET_NOLIMIT_HOME_CURRENT, payload, 2, status, timeoutMs);
 }
 
@@ -612,7 +594,7 @@ MKSServoE::ERROR MKSServoE::setStallProtectEnable(bool enable, uint8_t &status, 
 
 MKSServoE::ERROR MKSServoE::setStallTolerance(uint16_t tolerance, uint8_t &status, uint32_t timeoutMs) {
   uint8_t payload[2];
-  MKS::put_u16_le(payload, tolerance);
+  MKS::put_u16_be(payload, tolerance);
   return sendStatusCommand(MKS::CMD_SET_STALL_TOLERANCE, payload, 2, status, timeoutMs);
 }
 
@@ -623,7 +605,7 @@ MKSServoE::ERROR MKSServoE::setCanBitrate(uint8_t code, uint8_t &status, uint32_
 
 MKSServoE::ERROR MKSServoE::setCanId(uint16_t id, uint8_t &status, uint32_t timeoutMs) {
   uint8_t payload[2];
-  MKS::put_u16_le(payload, id);
+  MKS::put_u16_be(payload, id);
   return sendStatusCommand(MKS::CMD_SET_CAN_ID, payload, 2, status, timeoutMs);
 }
 
@@ -634,7 +616,7 @@ MKSServoE::ERROR MKSServoE::setRespondActive(uint8_t respond, uint8_t active, ui
 
 MKSServoE::ERROR MKSServoE::setGroupId(uint16_t id, uint8_t &status, uint32_t timeoutMs) {
   uint8_t payload[2];
-  MKS::put_u16_le(payload, id);
+  MKS::put_u16_be(payload, id);
   return sendStatusCommand(MKS::CMD_SET_GROUP_ID, payload, 2, status, timeoutMs);
 }
 

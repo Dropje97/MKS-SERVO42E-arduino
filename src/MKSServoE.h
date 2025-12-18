@@ -109,7 +109,7 @@ private:
   uint16_t _targetId;
   uint16_t _txId;
   ResponseSlot _slots[RESPONSE_QUEUE_SLOTS];
-  uint8_t _reservedCmds[32];
+  uint8_t _reservedCount[256];
   uint32_t _nextSequence;
 
   uint8_t checksum(const uint8_t* data, uint8_t len) const;
@@ -124,6 +124,6 @@ private:
   void enqueueFrame(uint8_t slotIndex, const CanFrame &frame);
   bool popFrame(uint8_t slotIndex, CanFrame &outFrame);
   bool isReserved(uint8_t cmd) const;
-  void setReserved(uint8_t cmd);
-  void clearReserved(uint8_t cmd);
+  void reserve(uint8_t cmd);
+  void unreserve(uint8_t cmd);
 };
